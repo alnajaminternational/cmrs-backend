@@ -13,8 +13,7 @@ import io, os
 
 app = Flask(__name__)
 
-# ── Explicit CORS — allow all origins ──
-def add_cors(response):
+def corsify(response):
     response.headers['Access-Control-Allow-Origin']  = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
@@ -22,16 +21,12 @@ def add_cors(response):
 
 @app.after_request
 def after_request(response):
-    return add_cors(response)
+    return corsify(response)
 
-# Handle preflight OPTIONS requests
 @app.route('/submit', methods=['OPTIONS'])
-def submit_options():
-    return add_cors(make_response('', 200))
-
 @app.route('/health', methods=['OPTIONS'])
-def health_options():
-    return add_cors(make_response('', 200))
+def options():
+    return corsify(make_response('', 200))
 
 GMAIL_ADDRESS      = "cv@alnajam.com"
 GMAIL_APP_PASSWORD = "anfqdjxzuyjhysoi"
@@ -41,62 +36,71 @@ def build_pdf(d):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
         rightMargin=15*mm, leftMargin=15*mm, topMargin=12*mm, bottomMargin=12*mm)
-    normal  = ParagraphStyle('n', fontName='Helvetica',      fontSize=8.5, leading=11)
-    bold    = ParagraphStyle('b', fontName='Helvetica-Bold', fontSize=8.5, leading=11)
-    title_s = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=11, leading=14, alignment=1)
+
+    N = ParagraphStyle('n', fontName='Helvetica',      fontSize=8.5, leading=11)
+    B = ParagraphStyle('b', fontName='Helvetica-Bold', fontSize=8.5, leading=11)
+    T = ParagraphStyle('t', fontName='Helvetica-Bold', fontSize=11,  leading=14, alignment=1)
+
+    BOX  = [('BOX',(0,0),(-1,-1),0.5,colors.black),
+            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ('LEFTPADDING',(0,0),(-1,-1),4),('MINROWHEIGHT',(0,0),(-1,-1),14)]
+    GRID = BOX + [('INNERGRID',(0,0),(-1,-1),0.5,colors.black),('VALIGN',(0,0),(-1,-1),'MIDDLE')]
+
+    def p(text, style=None):
+        return Paragraph(str(text or ''), style or N)
 
     def sec(label):
-        t = Table([[Paragraph(label, bold)]], colWidths=[180*mm])
-        t.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.8,colors.black),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),('LEFTPADDING',(0,0),(-1,-1),4)]))
+        t = Table([[p(label,B)]], colWidths=[180*mm])
+        t.setStyle(TableStyle(BOX))
         return t
 
     def row2(lbl, val, lw=65*mm):
-        t = Table([[Paragraph(lbl,bold), Paragraph(str(val or ''),normal)]], colWidths=[lw,180*mm-lw])
-        t.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.black),('INNERGRID',(0,0),(-1,-1),0.5,colors.black),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('LEFTPADDING',(0,0),(-1,-1),4),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('MINROWHEIGHT',(0,0),(-1,-1),14)]))
+        t = Table([[p(lbl,B), p(val)]], colWidths=[lw, 180*mm-lw])
+        t.setStyle(TableStyle(GRID))
         return t
 
     def tbl2(left, right, lw=50*mm):
-        lp = left  if isinstance(left,  Paragraph) else Paragraph(str(left  or ''), normal)
-        rp = right if isinstance(right, Paragraph) else Paragraph(str(right or ''), normal)
-        t = Table([[lp, rp]], colWidths=[lw,180*mm-lw])
-        t.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.black),('INNERGRID',(0,0),(-1,-1),0.5,colors.black),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('LEFTPADDING',(0,0),(-1,-1),4),('VALIGN',(0,0),(-1,-1),'MIDDLE'),('MINROWHEIGHT',(0,0),(-1,-1),14)]))
+        lp = left  if isinstance(left,  Paragraph) else p(left)
+        rp = right if isinstance(right, Paragraph) else p(right)
+        t = Table([[lp, rp]], colWidths=[lw, 180*mm-lw])
+        t.setStyle(TableStyle(GRID))
         return t
 
     def fullrow(val):
-        t = Table([[Paragraph(str(val or ''),normal)]], colWidths=[180*mm])
-        t.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.black),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('LEFTPADDING',(0,0),(-1,-1),4),('MINROWHEIGHT',(0,0),(-1,-1),14)]))
+        t = Table([[p(val)]], colWidths=[180*mm])
+        t.setStyle(TableStyle(BOX))
         return t
 
     story = []
-    hdr = Table([[
-        Paragraph("Kingdom of Saudi Arabia\nMinistry of National Guard\nHealth Affairs\nKing Abdulaziz Medical City", bold),
-        Paragraph("[ KAMC ]", ParagraphStyle('c',fontName='Helvetica-Bold',fontSize=10,alignment=1)),
-        Paragraph("والمملكة العربية السعودية\nوزارة الحرس الوطني\nالشؤون الصحية\nمدينة الملك عبدالعزيز الطبية", bold),
-    ]], colWidths=[60*mm,60*mm,60*mm])
-    hdr.setStyle(TableStyle([('ALIGN',(0,0),(0,0),'LEFT'),('ALIGN',(1,0),(1,0),'CENTER'),('ALIGN',(2,0),(2,0),'RIGHT'),
-        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LINEBELOW',(0,0),(-1,-1),1.5,colors.black),
-        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),6)]))
-    story.append(hdr)
-    story.append(Spacer(1,3*mm))
 
-    ttl = Table([[Paragraph("Corporate Medical Recruitment Application Form",title_s)]], colWidths=[180*mm])
-    ttl.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#c8c8c8')),
-        ('BOX',(0,0),(-1,-1),0.8,colors.black),('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]))
+    # Header
+    hdr = Table([[
+        p("Kingdom of Saudi Arabia\nMinistry of National Guard\nHealth Affairs\nKing Abdulaziz Medical City", B),
+        p("[ KAMC ]", ParagraphStyle('c', fontName='Helvetica-Bold', fontSize=10, alignment=1)),
+        p("والمملكة العربية السعودية\nوزارة الحرس الوطني\nالشؤون الصحية\nمدينة الملك عبدالعزيز الطبية", B),
+    ]], colWidths=[60*mm, 60*mm, 60*mm])
+    hdr.setStyle(TableStyle([
+        ('ALIGN',(0,0),(0,0),'LEFT'),('ALIGN',(1,0),(1,0),'CENTER'),('ALIGN',(2,0),(2,0),'RIGHT'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),('LINEBELOW',(0,0),(-1,-1),1.5,colors.black),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),6),
+    ]))
+    story.append(hdr)
+    story.append(Spacer(1, 3*mm))
+
+    ttl = Table([[p("Corporate Medical Recruitment Application Form", T)]], colWidths=[180*mm])
+    ttl.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#c8c8c8')),
+        ('BOX',(0,0),(-1,-1),0.8,colors.black),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+    ]))
     story.append(ttl)
-    story.append(Spacer(1,1*mm))
+    story.append(Spacer(1, 1*mm))
 
     story.append(row2("AGENCY NAME:", "ALNAJAM INTERNATIONAL"))
     story.append(row2("POSITION APPLIED FOR:", d.get('position','')))
     story.append(sec("BIOGRAPHICAL DATA:"))
     story.append(row2("Name of Candidate (as per passport):", d.get('candidate_name','')))
-    story.append(row2("Full Date of Birth (day-month-year):",  d.get('dob','')))
+    story.append(row2("Full Date of Birth (day-month-year):", d.get('dob','')))
     story.append(row2("Gender:",      d.get('gender','')))
     story.append(row2("Nationality:", d.get('nationality','')))
     story.append(row2("Weight:",      d.get('weight','')))
@@ -107,21 +111,19 @@ def build_pdf(d):
         story.append(fullrow(f"{d.get(f'qual_date_{i}','')}  {d.get(f'qual_desc_{i}','')}".strip()))
 
     story.append(sec("TRAINING / FELLOWSHIP: (in chronological order with recent training first)"))
-    story.append(tbl2(Paragraph("Inclusive Date (month/year)",bold), Paragraph("Discipline / Specialty, Institution, City/State, and Country",bold)))
+    story.append(tbl2(p("Inclusive Date (month/year)",B), p("Discipline / Specialty, Institution, City/State, and Country",B)))
     for i in range(1,6):
         story.append(tbl2(d.get(f'train_date_{i}',''), d.get(f'train_desc_{i}','')))
 
     story.append(sec("WORK EXPERIENCE: (in chronological order with recent appointment first)"))
-    story.append(tbl2(Paragraph("Inclusive Date (month/year)",bold), Paragraph("Position, Discipline/Specialty, Institution, City/State, and Country",bold)))
+    story.append(tbl2(p("Inclusive Date (month/year)",B), p("Position, Discipline/Specialty, Institution, City/State, and Country",B)))
     for i in range(1,10):
         story.append(tbl2(d.get(f'work_date_{i}',''), d.get(f'work_desc_{i}','')))
 
     story.append(sec("REMARKS / CANDIDATE'S SPECIFIC REQUIREMENT / EXPECTATION (if any):"))
-    t = Table([[Paragraph(str(d.get('remarks','') or ''),normal)]], colWidths=[180*mm])
-    t.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.5,colors.black),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-        ('LEFTPADDING',(0,0),(-1,-1),4),('MINROWHEIGHT',(0,0),(-1,-1),28)]))
-    story.append(t)
+    rem = Table([[p(d.get('remarks',''))]], colWidths=[180*mm])
+    rem.setStyle(TableStyle(BOX + [('MINROWHEIGHT',(0,0),(-1,-1),28)]))
+    story.append(rem)
 
     doc.build(story)
     buffer.seek(0)
@@ -138,10 +140,11 @@ def send_email(pdf_bytes, candidate_name, position):
         f"Position:  {position}\n\n"
         f"Please find the filled application form attached.\n\n"
         f"— CMRS Automated Form System", 'plain'))
-    part = MIMEBase('application','octet-stream')
+    part = MIMEBase('application', 'octet-stream')
     part.set_payload(pdf_bytes)
     encoders.encode_base64(part)
-    part.add_header('Content-Disposition', f'attachment; filename="CMRS_{candidate_name.replace(" ","_")}.pdf"')
+    part.add_header('Content-Disposition',
+        f'attachment; filename="CMRS_{candidate_name.replace(" ","_")}.pdf"')
     msg.attach(part)
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
         s.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
@@ -151,12 +154,14 @@ def send_email(pdf_bytes, candidate_name, position):
 def submit():
     try:
         data = request.get_json()
-        name     = data.get('candidate_name','Unknown Candidate')
-        position = data.get('position','Not specified')
-        send_email(build_pdf(data), name, position)
+        name     = data.get('candidate_name', 'Unknown Candidate')
+        position = data.get('position', 'Not specified')
+        pdf      = build_pdf(data)
+        send_email(pdf, name, position)
         return jsonify({"ok": True})
     except Exception as e:
-        print("Error:", e)
+        print("SUBMIT ERROR:", e)
+        import traceback; traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
@@ -164,5 +169,4 @@ def health():
     return jsonify({"status": "running"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT',5000)))
-
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
