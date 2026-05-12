@@ -1,5 +1,4 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask import Flask, request, jsonify, make_response
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -13,7 +12,26 @@ from reportlab.lib.units import mm
 import io, os
 
 app = Flask(__name__)
-CORS(app)
+
+# ── Explicit CORS — allow all origins ──
+def add_cors(response):
+    response.headers['Access-Control-Allow-Origin']  = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'POST, GET, OPTIONS'
+    return response
+
+@app.after_request
+def after_request(response):
+    return add_cors(response)
+
+# Handle preflight OPTIONS requests
+@app.route('/submit', methods=['OPTIONS'])
+def submit_options():
+    return add_cors(make_response('', 200))
+
+@app.route('/health', methods=['OPTIONS'])
+def health_options():
+    return add_cors(make_response('', 200))
 
 GMAIL_ADDRESS      = "cv@alnajam.com"
 GMAIL_APP_PASSWORD = "anfqdjxzuyjhysoi"
