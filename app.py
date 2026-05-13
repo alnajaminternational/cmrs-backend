@@ -148,8 +148,10 @@ def build_pdf(d):
         story.append(data_row(d.get(f'work_date_{i}',''), d.get(f'work_desc_{i}','')))
 
     story.append(sec("REMARKS / CANDIDATE'S SPECIFIC REQUIREMENT / EXPECTATION", 'if any:'))
-    for i in range(1,4):
-        story.append(data_row(d.get(f'remarks_date_{i}',''), d.get(f'remarks_desc_{i}','')))
+    remarks = d.get('remarks', '')
+    story.append(data_row('', remarks or ''))
+    story.append(data_row('', ''))
+    story.append(data_row('', ''))
 
     doc.build(story)
     buf.seek(0)
