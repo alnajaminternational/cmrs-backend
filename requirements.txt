@@ -2,3 +2,5 @@ flask
 flask-cors
 reportlab
 gunicorn
+arabic-reshaper
+python-bidi
