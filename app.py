@@ -29,7 +29,7 @@ def options():
     return corsify(make_response('', 200))
 
 GMAIL_ADDRESS      = "cv@alnajam.com"
-GMAIL_APP_PASSWORD = "anfqdjxzuyjhysoi"
+GMAIL_APP_PASSWORD = os.environ.get("yxvmvvjqxeltlmpv")
 RECIPIENT_EMAIL    = "cv@alnajam.com"
 
 def build_pdf(d):
