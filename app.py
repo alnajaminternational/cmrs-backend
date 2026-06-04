@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, send_file
 import smtplib, os, io, base64
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -6,11 +6,12 @@ from email.mime.base import MIMEBase
 from email import encoders
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image, HRFlowable, KeepTogether
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import arabic_reshaper
 from bidi.algorithm import get_display
 
@@ -19,7 +20,7 @@ app = Flask(__name__)
 pdfmetrics.registerFont(TTFont('DejaVu',  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
 pdfmetrics.registerFont(TTFont('DejaVuB', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
 
-LOGO_B64 = "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"
+LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAFYAAABGCAIAAADZ4vQ7AAAACXBIWXMAAAsSAAALEgHS3X78AAAgAElEQVR42r28d5BdV34uutLO++TcOaujutWSbAWrbdkSNjZJjAdssAcYmLkm3IncS74qz0C9V/XufbwB3mVgPAwGYzDCxoBtjG3Jki2jYEVLrVbonMPpcPI5++y81vtj2yrGYM9QM5dVXV27uuvs2uvba/1+3/f7fetAxhj4XePG370L77eDUNl1HEYVQFSCoOPYhkYhwBJHMaoww6XIsWyzZCiIi0ohiDmGoMkApcBidtmoLKQXpqYmllbmr167UtWK1XIFA5aMx3o6Ovt6u2trm2tbuwEWeYwRBK5LLctyHQsAEPT5bduGjAq8gAAFAJiGYRiGovgghAghAAClFACAEIIQgncYv/0v+HtB4EJkIUgBQJaFLJu4LkSMIeAgoFHTxVAWfQQQAByREuRiplsbucJienVs/Pr41MTi8lw2nylpJds0IHQ5gmRekDgOQwRdh1mOThkTQk3tXQObN3d2bmppaYnHowgBw7AMwwgG/QCAcqWsaWVZlv0+PwDAsd0/KAQMAgdAAACwHGjbPMRQIABD0zUZx2W1gu04kiiqvIhMZ2l8+urw5bOnz2xsbKytrTLXjkaj9fW18VjEJ0l+SZF4ThFEApil6flcLr+eyWr6hcl5C3IUAkmSauvqBrcP7rl1qHFTG4DA1Ku6aQqSKEoCBcB2bcdxeMwj8AeEAADgOA5jjGMQEw4ACKjrMNdBoOyYWCAiFnWrPDs6fu2NN84dO3HpzOsSBM31dVv6B/r7+poa6gOKShgELnWrBmaQowAxgCgAjAEKHMRlIB5dWB6dGJ+amZ5ZmDdcs6O7Z2DbwL33fZSTREGVIUcMxzBsCxMiixJ16B8UAsgAwtCu6hhgJIjAZZVi2QaUV2UoEQZAvrBx5vjxl575xeLUREzx1QV8H3nv/qZUMhKNA91YmJpdmJlzyoaAydpCmmOYh1jiRJEXZEEUBcERpPjAIB8Ny8GwbVsj49dfOXHs9PkLs+mFwZ03f/j+j9zzoQNQEQvFQsXQZVVRFAW6f2AIAEUIOobBbMaJMqBYNwyKoCgLDIPDL7/80i+fGbs8zDnGzf39H9i3f7C7AxTWjaXl8eujE9fGVxaXrZIuQE4iolGuQhcCFyEAESIC4TiOs0VhDYP6np72TZ2BeDQYj/GqvLiWHpkc+/7BHxFV3bxt8AMf/cgtt90KCTZcu1wuB1XfH3gjUMAcyJjtAkahIEgQAtNghULhpReeP3roxaWJ8YGujrv3Dg10tHKuo68un3j6J5WVlVwmz2M+Ho6rkqpXzFK+FPSHbds1DddybJdBzBGe522Ru76+6igiZQAQ3NTRseuO27bu3CnWpY4dOfLjX/zsxNmznZt7H/jTP927f18oGgUAuI79h4bAsKuyKDuAaRVTFlSewNXFzOiVq1/9P/8vntpDWwc//sF7kjXJ9Wsjx48cnjh3Jk6p5NocEkRRliQFIs40bN1yLdd1AXEgowgzjBBPIMY2j3DYl6tqFUPXTHM9lzcZ6+jt3bJzxx3vvadqO0d+/doPfvIT3XXve+DBD9/7R/FEAkH2vz0j/CYKDNJMJR/0h/KlfLmst9Q26iX9X/7Xt578l++1JlL//aE/v2nL4MrwG1fPvL4yNZlJL7JiflMoFvepLkOFima6ruVCEwIg8DqlxO9r6uqIpBJFSyeSEEvFsEBM4PCylCsWMvm8ZjrT88vXxscLmrF3/5233HZHfUvr9Ympv/z+16lc+MC9n/uvX/x6KBKqaRWIoqiIlDLGCCEeIuyt8e64vCMEv3kLxpj3eYpZ0axAjlCH+XilXCz+yze/8/LTzyZl9R sPfyUI0Mb4xMXjx1Ymx4ltyRz2YUI0I+wPuBAVTdOg1EAAqrIYCXfd PChPxWp62gFYRVAF/gkAJ30yqJpaA0NdRCTUqUKOLGs WdfHpmYWlq/mp1vaW/qH9ixvbGusZa +mLR0u xmpVMKqmIaiWMYAECQLYY  wBikNAJYiQ IobAKR  PnNdBpA+hZhBCHVuqy4K9cFSiVKSKAMIRLCEGYIAIwWiwAWA"
 
 def ar(text): return get_display(arabic_reshaper.reshape(text))
 
@@ -34,11 +35,16 @@ def after_request(response): return corsify(response)
 
 @app.route('/submit', methods=['OPTIONS'])
 @app.route('/health', methods=['OPTIONS'])
+@app.route('/generate', methods=['OPTIONS'])
 def options(): return corsify(make_response('', 200))
 
 GMAIL_ADDRESS      = os.environ.get("GMAIL_ADDRESS", "cv@alnajam.com")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 RECIPIENT_EMAIL    = os.environ.get("RECIPIENT_EMAIL", "cv@alnajam.com")
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CRMS PDF (existing — unchanged)
+# ═══════════════════════════════════════════════════════════════════════════
 
 def build_pdf(d):
     PAGE_W, PAGE_H = A4
@@ -191,8 +197,267 @@ def submit():
         import traceback; traceback.print_exc()
         return jsonify({"ok": False, "error": str(e)}), 500
 
+# ═══════════════════════════════════════════════════════════════════════════
+# AL NAJAM CV PDF (new — added below, nothing above changed)
+# ═══════════════════════════════════════════════════════════════════════════
+
+AN_RED   = colors.HexColor('#C62D33')
+AN_GOLD  = colors.HexColor('#B8860B')
+AN_DARK  = colors.HexColor('#2C2C2C')
+AN_LTRED = colors.HexColor('#FFF5F5')
+AN_GREY  = colors.HexColor('#888888')
+AN_LGREY = colors.HexColor('#F5F5F5')
+AN_WHITE = colors.white
+
+AN_W, AN_H = A4
+AN_ML = 10*mm; AN_MR = 10*mm; AN_MT = 8*mm; AN_MB = 10*mm
+AN_TW = AN_W - AN_ML - AN_MR
+
+def AN_S(size=10, bold=False, color=colors.black, align=TA_LEFT):
+    return ParagraphStyle('ans', fontSize=size,
+        fontName='Helvetica-Bold' if bold else 'Helvetica',
+        textColor=color, alignment=align, leading=size*1.4,
+        spaceAfter=0, spaceBefore=0)
+
+def an_sec_header(num, title):
+    label = f"{num}.  {title}" if num else title
+    t = Table([[Paragraph(f"<b>{label}</b>", AN_S(10, bold=True, color=AN_WHITE))]], colWidths=[AN_TW])
+    t.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),AN_RED),
+        ('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
+        ('LEFTPADDING',(0,0),(-1,-1),8),
+    ]))
+    return t
+
+def an_empty_section(num, title, msg):
+    return KeepTogether([an_sec_header(num, title),
+        Table([[Paragraph(msg, AN_S(9, color=AN_GREY))]], colWidths=[AN_TW],
+              style=[('LEFTPADDING',(0,0),(-1,-1),8),
+                     ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4)]),
+        Spacer(1, 2*mm)])
+
+def an_data_table(headers, rows, col_widths):
+    data = [[Paragraph(f"<b>{h}</b>", AN_S(9, bold=True, color=AN_WHITE, align=TA_CENTER)) for h in headers]]
+    for row in rows:
+        data.append([Paragraph(str(c or ''), AN_S(9, align=TA_CENTER)) for c in row])
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,0),AN_DARK),
+        ('ROWBACKGROUNDS',(0,1),(-1,-1),[AN_WHITE,AN_LTRED]),
+        ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+        ('GRID',(0,0),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
+    ]))
+    return t
+
+def an_date_table(headers, rows, col_widths):
+    data = [[Paragraph(f"<b>{h}</b>", AN_S(9, bold=True, color=AN_WHITE, align=TA_CENTER)) for h in headers]]
+    keys = [k for k in rows[0].keys() if k not in ('dateFrom','dateTo','date')] if rows else []
+    for row in rows:
+        d_from = row.get('dateFrom','') or ''
+        d_to   = row.get('dateTo','')   or ''
+        if not d_from and not d_to:
+            single = str(row.get('date','') or '')
+            for sep in [' to ',' – ',' - ','–']:
+                if sep in single:
+                    parts = single.split(sep,1)
+                    d_from = parts[0].strip(); d_to = parts[1].strip(); break
+            else:
+                d_from = single; d_to = ''
+        date_text = f"{d_from}<br/>to {d_to}" if d_to else d_from
+        date_cell = Paragraph(date_text, AN_S(9, align=TA_CENTER))
+        rest = [Paragraph(str(row.get(k,'') or ''), AN_S(9)) for k in keys]
+        data.append([date_cell] + rest)
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,0),AN_DARK),
+        ('ROWBACKGROUNDS',(0,1),(-1,-1),[AN_WHITE,AN_LTRED]),
+        ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+        ('GRID',(0,0),(-1,-1),0.3,colors.HexColor('#DDDDDD')),
+    ]))
+    return t
+
+def an_bio_table(rows):
+    CW = [38*mm, AN_TW/2-38*mm, 38*mm, AN_TW/2-38*mm]
+    data = []; span_cmds = []
+    for i, r in enumerate(rows):
+        if len(r) == 4:
+            data.append([Paragraph(f"<b>{r[0]}</b>", AN_S(10)),
+                         Paragraph(str(r[1] or ''), AN_S(10)),
+                         Paragraph(f"<b>{r[2]}</b>", AN_S(10)),
+                         Paragraph(str(r[3] or ''), AN_S(10))])
+        else:
+            data.append([Paragraph(f"<b>{r[0]}</b>", AN_S(10)),
+                         Paragraph(str(r[1] or ''), AN_S(10)),'',''])
+            span_cmds.append(('SPAN',(1,i),(3,i)))
+    style_cmds = [
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),6),
+        ('LINEBELOW',(0,0),(-1,-2),0.3,colors.HexColor('#EEEEEE')),
+        ('LINEABOVE',(0,8),(-1,8),1,colors.HexColor('#BBBBBB'),1,(3,3)),
+    ] + span_cmds
+    for i, r in enumerate(rows):
+        style_cmds.append(('BACKGROUND',(0,i),(0,i),AN_LGREY))
+        if len(r) == 4: style_cmds.append(('BACKGROUND',(2,i),(2,i),AN_LGREY))
+    t = Table(data, colWidths=CW)
+    t.setStyle(TableStyle(style_cmds))
+    return t
+
+def an_format_position(position, prof_level, specialty):
+    pos_map = {"Doctor":"Physician"}
+    position   = pos_map.get(position, position)
+    prof_level = (prof_level or "").replace(" Doctor","").replace("Doctor ","").strip()
+    return " — ".join([p for p in [position, prof_level, specialty] if p])
+
+def build_an_pdf(data, redacted=False):
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=AN_ML, rightMargin=AN_MR,
+                            topMargin=AN_MT, bottomMargin=AN_MB)
+    story = []
+    pos_line = an_format_position(data.get('position',''), data.get('profLevel',''), data.get('specialty',''))
+
+    # Logo
+    logo_b64 = data.get('logoBase64','')
+    if logo_b64:
+        logo_elem = Image(io.BytesIO(base64.b64decode(logo_b64)), width=28*mm, height=28*mm)
+    else:
+        logo_elem = Table([["AL NAJAM\nLOGO"]], colWidths=[30*mm], rowHeights=[32*mm])
+        logo_elem.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('FONTSIZE',(0,0),(-1,-1),7),('TEXTCOLOR',(0,0),(-1,-1),AN_GREY),
+            ('BOX',(0,0),(-1,-1),0.5,colors.HexColor('#CCCCCC')),('BACKGROUND',(0,0),(-1,-1),AN_LGREY)]))
+
+    # Photo
+    photo_b64 = data.get('photoBase64','')
+    if photo_b64:
+        photo_elem = Image(io.BytesIO(base64.b64decode(photo_b64)), width=30*mm, height=38*mm)
+    else:
+        photo_elem = Table([["PHOTO"]], colWidths=[30*mm], rowHeights=[38*mm])
+        photo_elem.setStyle(TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+            ('FONTSIZE',(0,0),(-1,-1),9),('TEXTCOLOR',(0,0),(-1,-1),AN_GREY),
+            ('BOX',(0,0),(-1,-1),0.5,colors.HexColor('#CCCCCC')),('BACKGROUND',(0,0),(-1,-1),AN_LGREY)]))
+
+    title_content = [
+        Paragraph("<b>RECRUITMENT APPLICATION FORM</b>", AN_S(15,bold=True,color=AN_RED,align=TA_CENTER)),
+        Spacer(1,2*mm),
+        Paragraph("Al Najam International — Human Resource Providers Since 1971 | License # 0899/LHR",
+                  AN_S(8,color=AN_GOLD,align=TA_CENTER)),
+        Spacer(1,3*mm),
+        Paragraph(f"<b>Position:</b> {pos_line}", AN_S(10.5,align=TA_CENTER)),
+    ]
+    hdr = Table([[logo_elem, title_content, photo_elem]], colWidths=[32*mm, AN_TW-64*mm, 32*mm])
+    hdr.setStyle(TableStyle([
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),('ALIGN',(0,0),(-1,-1),'CENTER'),
+        ('LINEBELOW',(0,0),(-1,-1),2,AN_RED),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),6),
+    ]))
+    story.append(hdr)
+    story.append(Spacer(1,3*mm))
+
+    # Key Skills
+    skills = [s for s in (data.get('skills') or []) if s]
+    if skills:
+        story.append(KeepTogether([
+            an_sec_header("","KEY SKILLS"),
+            Table([[Paragraph("   •   ".join(skills), AN_S(10))]], colWidths=[AN_TW],
+                  style=[('TOPPADDING',(0,0),(-1,-1),5),('BOTTOMPADDING',(0,0),(-1,-1),5),
+                         ('LEFTPADDING',(0,0),(-1,-1),8),('BACKGROUND',(0,0),(-1,-1),AN_LGREY)]),
+            Spacer(1,2*mm)
+        ]))
+
+    # Bio
+    bio_rows = [
+        ("Full Name:",       data.get('fullName',''),       "Date of Birth:",       data.get('dob','')),
+        ("CNIC:",            data.get('cnic',''),            "Gender:",              data.get('gender','')),
+        ("Passport No:",     data.get('passportNo',''),      "Nationality:",         data.get('nationality','')),
+        ("Passport Expiry:", data.get('passportExpiry',''),  "Religion:",            data.get('religion','')),
+        ("Marital Status:",  data.get('maritalStatus',''),   "Dependents:",          data.get('dependents','')),
+        ("Height:",          data.get('height',''),          "Weight:",              data.get('weight','')),
+        ("GCC Experience:",  data.get('gccExp',''),          "English Proficiency:", data.get('english','')),
+        ("Availability:",    data.get('availability',''),),
+    ]
+    if not redacted:
+        bio_rows.append(("Email:", data.get('email',''), "Phone:", data.get('phone','')))
+        bio_rows.append(("Address:", data.get('address',''),))
+    story.append(KeepTogether([an_sec_header("1","BIOGRAPHICAL DATA"), an_bio_table(bio_rows), Spacer(1,2*mm)]))
+
+    # Education
+    quals = [q for q in (data.get('qualifications') or []) if q.get('degree') or q.get('institution')]
+    if quals:
+        rows = [{'dateFrom':q.get('dateFrom',''),'dateTo':q.get('dateTo',''),
+                 'degree':q.get('degree',''),'institution':q.get('institution',''),'country':q.get('country','')} for q in quals]
+        story.append(KeepTogether([an_sec_header("2","EDUCATION  (most recent first)"),
+            an_date_table(["Date","Qualification / Degree","Institution","Country"],rows,[32*mm,58*mm,75*mm,25*mm]),
+            Spacer(1,2*mm)]))
+    else:
+        story.append(an_empty_section("2","EDUCATION  (most recent first)","No education entries provided."))
+
+    # Training
+    trains = [t for t in (data.get('training') or []) if t.get('discipline') or t.get('institution')]
+    if trains:
+        rows = [{'dateFrom':t.get('dateFrom',''),'dateTo':t.get('dateTo',''),
+                 'discipline':t.get('discipline',''),'institution':t.get('institution',''),'country':t.get('country','')} for t in trains]
+        story.append(KeepTogether([an_sec_header("3","TRAINING / FELLOWSHIP"),
+            an_date_table(["Date","Discipline / Specialty","Institution","Country"],rows,[32*mm,58*mm,75*mm,25*mm]),
+            Spacer(1,2*mm)]))
+    else:
+        story.append(an_empty_section("3","TRAINING / FELLOWSHIP","No training entries provided."))
+
+    # Licenses
+    lics = [l for l in (data.get('licenses') or []) if l.get('licenseNo') or l.get('authority')]
+    if lics:
+        lic_rows = [[l.get('licenseNo',''),l.get('designation',''),
+                     l.get('issueDate',''),l.get('expiryDate',''),l.get('authority','')] for l in lics]
+        story.append(KeepTogether([an_sec_header("4","PROFESSIONAL LICENSES  (most recent first)"),
+            an_data_table(["License No","Designation","Issue Date","Expiry","Authority"],
+                          lic_rows,[28*mm,38*mm,26*mm,26*mm,72*mm]),
+            Spacer(1,2*mm)]))
+    else:
+        story.append(an_empty_section("4","PROFESSIONAL LICENSES  (most recent first)","No licenses provided."))
+
+    # Experience
+    exps = [e for e in (data.get('experience') or []) if e.get('position') or e.get('institution')]
+    if exps:
+        rows = [{'dateFrom':e.get('dateFrom',''),'dateTo':e.get('dateTo',''),
+                 'position':e.get('position',''),'institution':e.get('institution',''),'country':e.get('country','')} for e in exps]
+        story.append(KeepTogether([an_sec_header("5","WORK EXPERIENCE  (most recent first)"),
+            an_date_table(["Date","Position / Designation","Institution","Country"],rows,[32*mm,58*mm,75*mm,25*mm]),
+            Spacer(1,2*mm)]))
+    else:
+        story.append(an_empty_section("5","WORK EXPERIENCE  (most recent first)","No experience entries provided."))
+
+    # Footer
+    story.append(HRFlowable(width=AN_TW, thickness=1, color=AN_GOLD, spaceAfter=2*mm))
+    footer_txt = ("Al Najam International  |  License # 0899/LHR  |  Human Resource Providers Since 1971<br/>"
+                  "+92 300 4747 115  |  support@alnajam.com  |  www.alnajam.com")
+    if redacted:
+        footer_txt += "<br/><font color='#C62D33'><b>[REDACTED — Contact details removed]</b></font>"
+    story.append(Paragraph(footer_txt, AN_S(8,color=AN_GREY,align=TA_CENTER)))
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
+
+@app.route('/generate', methods=['POST'])
+def generate():
+    try:
+        data     = request.get_json()
+        redacted = data.get('redacted', False)
+        pdf_buf  = build_an_pdf(data, redacted)
+        suffix   = "Redacted" if redacted else "Full"
+        parts    = [data.get('position',''), data.get('profLevel',''),
+                    data.get('specialty',''), data.get('fullName','')]
+        filename = " — ".join([p for p in parts if p]) + f" — {suffix}.pdf"
+        return send_file(pdf_buf, mimetype='application/pdf',
+                         as_attachment=True, download_name=filename)
+    except Exception as e:
+        print("GENERATE ERROR:", e)
+        import traceback; traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/health', methods=['GET'])
-def health(): return jsonify({"status": "running"})
+def health(): return jsonify({"status": "running", "services": ["cmrs", "alnajam-cv"]})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
