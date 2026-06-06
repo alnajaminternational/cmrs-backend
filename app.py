@@ -456,8 +456,27 @@ def generate():
         import traceback; traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/generate_ngha', methods=['POST'])
+def generate_ngha():
+    """Generate NGHA/CRMS PDF and return bytes directly (no email)"""
+    try:
+        data = request.get_json()
+        pdf  = build_pdf(data)
+        name = data.get('candidate_name', 'Candidate').replace(' ', '_')
+        return send_file(
+            io.BytesIO(pdf),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"NGHA_{name}.pdf"
+        )
+    except Exception as e:
+        print("GENERATE_NGHA ERROR:", e)
+        import traceback; traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 @app.route('/health', methods=['GET'])
-def health(): return jsonify({"status": "running", "services": ["cmrs", "alnajam-cv"]})
+def health(): return jsonify({"status": "running", "services": ["cmrs", "alnajam-cv", "ngha"]})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
