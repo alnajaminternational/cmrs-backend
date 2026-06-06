@@ -20,7 +20,7 @@ app = Flask(__name__)
 pdfmetrics.registerFont(TTFont('DejaVu',  '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
 pdfmetrics.registerFont(TTFont('DejaVuB', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
 
-LOGO_B64 = "iVBORw0KGgoAAAANSUhEUgAAAFYAAABGCAIAAADZ4vQ7AAAACXBIWXMAAAsSAAALEgHS3X78AAAgAElEQVR42r28d5BdV34uutLO++TcOaujutWSbAWrbdkSNjZJjAdssAcYmLkm3IncS74qz0C9V/XufbwB3mVgPAwGYzDCxoBtjG3Jki2jYEVLrVbonMPpcPI5++y81vtj2yrGYM9QM5dVXV27uuvs2uvba/1+3/f7fetAxhj4XePG370L77eDUNl1HEYVQFSCoOPYhkYhwBJHMaoww6XIsWyzZCiIi0ohiDmGoMkApcBidtmoLKQXpqYmllbmr167UtWK1XIFA5aMx3o6Ovt6u2trm2tbuwEWeYwRBK5LLctyHQsAEPT5bduGjAq8gAAFAJiGYRiGovgghAghAAClFACAEIIQgncYv/0v+HtB4EJkIUgBQJaFLJu4LkSMIeAgoFHTxVAWfQQQAByREuRiplsbucJienVs/Pr41MTi8lw2nylpJds0IHQ5gmRekDgOQwRdh1mOThkTQk3tXQObN3d2bmppaYnHowgBw7AMwwgG/QCAcqWsaWVZlv0+PwDAsd0/KAQMAgdAAACwHGjbPMRQIABD0zUZx2W1gu04kiiqvIhMZ2l8+urw5bOnz2xsbKytrTLXjkaj9fW18VjEJ0l+SZF4ThFEApil6flcLr+eyWr6hcl5C3IUAkmSauvqBrcP7rl1qHFTG4DA1Ku6aQqSKEoCBcB2bcdxeMwj8AeEAADgOA5jjGMQEw4ACKjrMNdBoOyYWCAiFnWrPDs6fu2NN84dO3HpzOsSBM31dVv6B/r7+poa6gOKShgELnWrBmaQowAxgCgAjAEKHMRlIB5dWB6dGJ+amZ5ZmDdcs6O7Z2DbwL33fZSTREGVIUcMxzBsCxMiixJ16B8UAsgAwtCu6hhgJIjAZZVi2QaUV2UoEQZAvrBx5vjxl575xeLUREzx1QV8H3nv/qZUMhKNA91YmJpdmJlzyoaAydpCmmOYh1jiRJEXZEEUBcERpPjAIB8Ny8GwbVsj49dfOXHs9PkLs+mFwZ03f/j+j9zzoQNQEQvFQsXQZVVRFAW6f2AIAEUIOobBbMaJMqBYNwyKoCgLDIPDL7/80i+fGbs8zDnGzf39H9i3f7C7AxTWjaXl8eujE9fGVxaXrZIuQE4iolGuQhcCFyEAESIC4TiOs0VhDYP6np72TZ2BeDQYj/GqvLiWHpkc+/7BHxFV3bxt8AMf/cgtt90KCTZcu1wuB1XfH3gjUMAcyJjtAkahIEgQAtNghULhpReeP3roxaWJ8YGujrv3Dg10tHKuo68un3j6J5WVlVwmz2M+Ho6rkqpXzFK+FPSHbds1DddybJdBzBGe522Ru76+6igiZQAQ3NTRseuO27bu3CnWpY4dOfLjX/zsxNmznZt7H/jTP927f18oGgUAuI79h4bAsKuyKDuAaRVTFlSewNXFzOiVq1/9P/8vntpDWwc//sF7kjXJ9Wsjx48cnjh3Jk6p5NocEkRRliQFIs40bN1yLdd1AXEgowgzjBBPIMY2j3DYl6tqFUPXTHM9lzcZ6+jt3bJzxx3vvadqO0d+/doPfvIT3XXve+DBD9/7R/FEAkH2vz0j/CYKDNJMJR/0h/KlfLmst9Q26iX9X/7Xt578l++1JlL//aE/v2nL4MrwG1fPvL4yNZlJL7JiflMoFvepLkOFima6ruVCEwIg8DqlxO9r6uqIpBJFSyeSEEvFsEBM4PCylCsWMvm8ZjrT88vXxscLmrF3/5233HZHfUvr9Ympv/z+16lc+MC9n/uvX/x6KBKqaRWIoqiIlDLGCCEeIuyt8e64vCMEv3kLxpj3eYpZ0axAjlCH+XilXCz+yze/8/LTzyZl9R sPfyUI0Mb4xMXjx1Ymx4ltyRz2YUI0I+wPuBAVTdOg1EAAqrIYCXfd PChPxWp62gFYRVAF/gkAJ30yqJpaA0NdRCTUqUKOLGs WdfHpmYWlq/mp1vaW/qH9ixvbGusZa +mLR0u xmpVMKqmIaiWMYAECQLYY  wBikNAJYiQ IobAKR  PnNdBpA+hZhBCHVuqy4K9cFSiVKSKAMIRLCEGYIAIwWiwAWA"
+LOGO_B64 = ""  # Fetched at runtime from Drive
 
 def ar(text): return get_display(arabic_reshaper.reshape(text))
 
@@ -94,7 +94,18 @@ def build_pdf(d):
     arabic_text = (ar("والمملكة العربية السعودية") + "<br/>" + ar("وزارة الحرس الوطني") +
                    "<br/>" + ar("الشؤون الصحية") + "<br/>" + ar("مدينة الملك عبدالعزيز الطبية"))
 
-    logo_img = Image(io.BytesIO(base64.b64decode(LOGO_B64)), width=18*mm, height=18*mm)
+    try:
+        try:
+            logo_b64 = d.get('logo_base64', '')
+            if logo_b64:
+                logo_img = Image(io.BytesIO(base64.b64decode(logo_b64)), width=18*mm, height=18*mm)
+            else:
+                raise ValueError('No logo')
+        except Exception as le:
+            print('Logo error:', le)
+            logo_img = Paragraph('<b>AL NAJAM</b>', N)
+    except Exception:
+        logo_img = Paragraph('', N)
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
