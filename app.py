@@ -732,7 +732,7 @@ def build_ngha_ah_pdf(data):
         [P('<b>Second Name:</b>', 8), P('', 8), '', ''],
         [P('<b>Family Name:</b>', 8), P(family_name, 8), P('<b>Telephone No.:</b>', 8), P(AN_PHONE, 8)],
         [P('<b>Gender:</b>', 8), P(gender, 8), P('<b>Mobile No.:</b>', 8), P(AN_PHONE, 8)],
-        [P('<b>Nationality:</b>', 8), P(nationality, 8), P('<b>Current Address:</b>', 8), P('(No need to fill if same as permanent)', 7, italic=True, color=colors.grey)],
+        [P('<b>Nationality:</b>', 8), P(nationality, 8), P('<b>Current Address:</b>', 8), P('<i>(No need to fill if same as permanent)</i>', 7, color=colors.grey)],
         [P('<b>Date of Birth (DD-MM-YYYY):</b>', 8), P(dob, 8), P('', 8), P('', 8)],
         [P('<b>Place of Birth (include Country):</b>', 8), P(place_birth, 8), P('<b>Telephone No./Mobile No.:</b>', 8), P(AN_PHONE, 8)],
         [P('<b>Height (in cm):</b>', 8), P(height, 8), P('<b>Weight (in kgs.):</b>', 8), P(weight, 8)],
@@ -1015,7 +1015,7 @@ def build_ngha_ah_pdf(data):
     ]))
     story.append(cert_table)
     story.append(Spacer(1, 2*mm))
-    story.append(P('* <b>Note:</b> Non-disclosure may result in rejection of application.', 8, italic=True))
+    story.append(P('<i>* <b>Note:</b> Non-disclosure may result in rejection of application.</i>', 8))
     story.append(Spacer(1, 4*mm))
 
     story.append(HRFlowable(width=W, thickness=0.5, color=MID_GREY))
