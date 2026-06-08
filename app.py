@@ -313,8 +313,9 @@ def an_bio_table(rows):
 
 def an_format_position(position, prof_level, specialty):
     pos_map = {"Doctor":"Physician"}
-    position   = pos_map.get(position, position)
-    prof_level = (prof_level or "").replace(" Doctor","").replace("Doctor ","").strip()
+    position   = pos_map.get(str(position or ''), str(position or ''))
+    prof_level = str(prof_level or "").replace(" Doctor","").replace("Doctor ","").strip()
+    specialty  = str(specialty or "")
     return " — ".join([p for p in [position, prof_level, specialty] if p])
 
 def build_an_pdf(data, redacted=False):
@@ -373,20 +374,23 @@ def build_an_pdf(data, redacted=False):
             Spacer(1,2*mm)
         ]))
 
+    # Helper to safely convert to string
+    def s(v): return str(v) if v is not None else ''
+
     # Bio
     bio_rows = [
-        ("Full Name:",       data.get('fullName',''),       "Date of Birth:",       data.get('dob','')),
-        ("CNIC:",            data.get('cnic',''),            "Gender:",              data.get('gender','')),
-        ("Passport No:",     data.get('passportNo',''),      "Nationality:",         data.get('nationality','')),
-        ("Passport Expiry:", data.get('passportExpiry',''),  "Religion:",            data.get('religion','')),
-        ("Marital Status:",  data.get('maritalStatus',''),   "Dependents:",          data.get('dependents','')),
-        ("Height:",          data.get('height',''),          "Weight:",              data.get('weight','')),
-        ("GCC Experience:",  data.get('gccExp',''),          "English Proficiency:", data.get('english','')),
-        ("Availability:",    data.get('availability',''),),
+        ("Full Name:",       s(data.get('fullName','')),       "Date of Birth:",       s(data.get('dob',''))),
+        ("CNIC:",            s(data.get('cnic','')),            "Gender:",              s(data.get('gender',''))),
+        ("Passport No:",     s(data.get('passportNo','')),      "Nationality:",         s(data.get('nationality',''))),
+        ("Passport Expiry:", s(data.get('passportExpiry','')),  "Religion:",            s(data.get('religion',''))),
+        ("Marital Status:",  s(data.get('maritalStatus','')),   "Dependents:",          s(data.get('dependents',''))),
+        ("Height:",          s(data.get('height','')),          "Weight:",              s(data.get('weight',''))),
+        ("GCC Experience:",  s(data.get('gccExp','')),          "English Proficiency:", s(data.get('english',''))),
+        ("Availability:",    s(data.get('availability','')),),
     ]
     if not redacted:
-        bio_rows.append(("Email:", data.get('email',''), "Phone:", data.get('phone','')))
-        bio_rows.append(("Address:", data.get('address',''),))
+        bio_rows.append(("Email:", s(data.get('email','')), "Phone:", s(data.get('phone',''))))
+        bio_rows.append(("Address:", s(data.get('address','')),))
     story.append(KeepTogether([an_sec_header("1","BIOGRAPHICAL DATA"), an_bio_table(bio_rows), Spacer(1,2*mm)]))
 
     # Education
