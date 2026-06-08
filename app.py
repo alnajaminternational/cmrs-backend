@@ -319,6 +319,12 @@ def an_format_position(position, prof_level, specialty):
     return " — ".join([p for p in [position, prof_level, specialty] if p])
 
 def build_an_pdf(data, redacted=False):
+    # Ensure all string fields are actually strings (sheet may send integers)
+    for k in ['position','profLevel','specialty','fullName','cnic','passportNo',
+              'passportExpiry','dob','gender','nationality','religion','maritalStatus',
+              'dependents','height','weight','gccExp','english','availability',
+              'email','phone','address','qualLevel','gradCountry']:
+        if k in data: data[k] = str(data[k] or '')
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=AN_ML, rightMargin=AN_MR,
@@ -457,8 +463,8 @@ def generate():
         redacted = data.get('redacted', False)
         pdf_buf  = build_an_pdf(data, redacted)
         suffix   = "Redacted" if redacted else "Full"
-        parts    = [data.get('position',''), data.get('profLevel',''),
-                    data.get('specialty',''), data.get('fullName','')]
+        parts    = [str(data.get('position','') or ''), str(data.get('profLevel','') or ''),
+                    str(data.get('specialty','') or ''), str(data.get('fullName','') or '')]
         filename = " — ".join([p for p in parts if p]) + f" — {suffix}.pdf"
         return send_file(pdf_buf, mimetype='application/pdf',
                          as_attachment=True, download_name=filename)
