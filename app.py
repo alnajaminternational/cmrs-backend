@@ -715,7 +715,7 @@ def build_ngha_ah_pdf(data):
 
     photo_tbl = Table([[P('Photo', 9, align=TA_CENTER, col=colors.grey)]],
                       colWidths=[W*0.11],
-                      rowHeights=[pos_tbl._rowHeights[0]*4 if hasattr(pos_tbl, '_rowHeights') else 28*mm])
+                      rowHeights=[32*mm])
     photo_tbl.setStyle(TableStyle([
         ('BOX',   (0,0), (-1,-1), 0.4, MGY),
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
