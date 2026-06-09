@@ -500,12 +500,12 @@ if __name__ == '__main__':
 
 
 
+
 # ═══════════════════════════════════════════════════════════════════════════
-# NGHA ALLIED HEALTH / NON-CLINICAL APPLICATION FORM
+# NGHA ALLIED HEALTH / NON-CLINICAL APPLICATION FORM — EXACT REPLICA
 # ═══════════════════════════════════════════════════════════════════════════
 
 def build_ngha_ah_pdf(data):
-    """Exact replica of NGHA Non-Clinical Application Form (3 pages)"""
     import io, base64
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
@@ -513,41 +513,58 @@ def build_ngha_ah_pdf(data):
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                     Paragraph, Spacer, HRFlowable, PageBreak)
+                                    Paragraph, Spacer, HRFlowable, PageBreak)
     from reportlab.platypus.flowables import Image as RLImage
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
-        leftMargin=12*mm, rightMargin=12*mm,
+        leftMargin=15*mm, rightMargin=15*mm,
         topMargin=10*mm, bottomMargin=10*mm)
-    W = A4[0] - 24*mm
+    W = A4[0] - 30*mm  # ~165mm usable
 
     # ── Colours ──────────────────────────────────────────────────────────────
-    DG   = colors.HexColor('#1a5276')  # dark green/blue header
-    LG   = colors.HexColor('#f2f2f2')  # light grey row
-    MG   = colors.HexColor('#cccccc')  # mid grey border
-    BLK  = colors.black
-    WHT  = colors.white
+    BLK = colors.black
+    WHT = colors.white
+    LGY = colors.HexColor('#f5f5f5')
+    MGY = colors.HexColor('#cccccc')
 
-    # ── Styles ────────────────────────────────────────────────────────────────
-    def NS(size=9, bold=False, align=TA_LEFT, color=BLK):
-        return ParagraphStyle('', fontSize=size,
-            fontName='Helvetica-Bold' if bold else 'Helvetica',
-            leading=size*1.3, alignment=align, textColor=color)
+    # ── Style helpers ─────────────────────────────────────────────────────────
+    def ST(sz=9, bold=False, align=TA_LEFT, col=BLK):
+        fn = 'Helvetica-Bold' if bold else 'Helvetica'
+        return ParagraphStyle('', fontSize=sz, fontName=fn,
+                              leading=sz*1.35, alignment=align, textColor=col)
 
-    def P(txt, size=9, bold=False, align=TA_LEFT, color=BLK):
-        return Paragraph(str(txt or ''), NS(size, bold, align, color))
+    def P(txt, sz=9, bold=False, align=TA_LEFT, col=BLK):
+        return Paragraph(str(txt or ''), ST(sz, bold, align, col))
 
-    # ── Safe string helper ────────────────────────────────────────────────────
-    def s(v): return str(v).strip() if v is not None and str(v).strip() not in ('', 'None') else ''
+    def s(v):
+        v = str(v) if v is not None else ''
+        return v if v.lower() not in ('none','null','') else ''
 
-    # ── Data ──────────────────────────────────────────────────────────────────
+    # ── Checkbox helper ───────────────────────────────────────────────────────
+    def chk(label, checked=False):
+        return f"{'☑' if checked else '☐'}  {label}"
+
+    # ── Table style helper ────────────────────────────────────────────────────
+    TS = TableStyle
+
+    def grid(tbl):
+        tbl.setStyle(TS([
+            ('GRID',(0,0),(-1,-1),0.4,MGY),
+            ('TOPPADDING',(0,0),(-1,-1),3),
+            ('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ('LEFTPADDING',(0,0),(-1,-1),4),
+            ('RIGHTPADDING',(0,0),(-1,-1),4),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ]))
+        return tbl
+
+    # ── Data ─────────────────────────────────────────────────────────────────
     full_name   = s(data.get('fullName',''))
     position    = s(data.get('position',''))
     specialty   = s(data.get('specialty',''))
-    availability= s(data.get('availability',''))
+    avail       = s(data.get('availability',''))
     gender      = s(data.get('gender',''))
-    religion    = s(data.get('religion',''))
     nationality = s(data.get('nationality',''))
     dob         = s(data.get('dob',''))
     age         = s(data.get('age',''))
@@ -565,61 +582,22 @@ def build_ngha_ah_pdf(data):
     employed    = s(data.get('currentlyEmployed',''))
     date_left   = s(data.get('dateLeft',''))
     app_date    = s(data.get('appDate',''))
-    locations   = data.get('nghaLocations') or []
-    quals       = data.get('qualifications') or []
-    lics        = data.get('licenses') or []
-    trains      = data.get('training') or []
-    exps        = data.get('experience') or []
-    refs        = data.get('references') or []
-    disc        = data.get('disclosure') or []
+    locations   = list(data.get('nghaLocations') or [])
+    quals       = list(data.get('qualifications') or [])
+    lics        = list(data.get('licenses') or [])
+    trains      = list(data.get('training') or [])
+    exps        = list(data.get('experience') or [])
+    refs        = list(data.get('references') or [])
+    disc        = list(data.get('disclosure') or [])
 
-    AN_ADDR  = "Office 109, 1st Floor, Al Hafeez Executive, Ali Zeb Road, Gulberg 3, Lahore, Pakistan"
+    name_parts  = full_name.split()
+    first_name  = name_parts[0] if name_parts else ''
+    family_name = name_parts[-1] if len(name_parts) > 1 else ''
+
+    AN_ADDR  = "Office 109, 1st Floor, Al Hafeez Executive,\nAli Zeb Road, Gulberg 3, Lahore, Pakistan"
     AN_PHONE = "+92 300 4747115"
     AN_EMAIL = "support@alnajam.com"
     AN_NAME  = "Al Najam International"
-
-    # ── Helper: section header ────────────────────────────────────────────────
-    def sec_hdr(txt):
-        t = Table([[P(f"<b>{txt}</b>", 9, bold=True, color=WHT)]], colWidths=[W])
-        t.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,-1),DG),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('LEFTPADDING',(0,0),(-1,-1),5),
-        ]))
-        return t
-
-    # ── Helper: data table (headers + rows, all strings) ─────────────────────
-    def dt(hdrs, rows, widths):
-        hrow = [P(f"<b>{h}</b>", 8, bold=True, align=TA_CENTER, color=WHT) for h in hdrs]
-        tdata = [hrow]
-        for r in rows:
-            tdata.append([P(str(c or ''), 8) for c in r])
-        t = Table(tdata, colWidths=widths, repeatRows=1)
-        t.setStyle(TableStyle([
-            ('BACKGROUND',(0,0),(-1,0),DG),
-            ('ROWBACKGROUNDS',(0,1),(-1,-1),[WHT,LG]),
-            ('GRID',(0,0),(-1,-1),0.3,MG),
-            ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('LEFTPADDING',(0,0),(-1,-1),4),
-            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ]))
-        return t
-
-    # ── Helper: info table (label/value pairs) ────────────────────────────────
-    def info_row(items):
-        """items = [(label, value), ...] — 2 or 4 items per row"""
-        row = []
-        for i, (lbl, val) in enumerate(items):
-            row.append(P(f"<b>{lbl}</b>", 8))
-            row.append(P(str(val or ''), 8))
-        # Pad to 4 cells
-        while len(row) < 4:
-            row.append(P('', 8))
-        return row
-
-    # ── Helper: checkbox ─────────────────────────────────────────────────────
-    def chk(label, checked):
-        return f"{'☑' if checked else '☐'}  {label}"
 
     story = []
 
@@ -627,414 +605,585 @@ def build_ngha_ah_pdf(data):
     # PAGE 1
     # ═══════════════════════════════════════════════════════════════════════
 
-    # NGHA logo
+    # ── NGHA Logo ─────────────────────────────────────────────────────────
     ngha_b64 = s(data.get('nghaLogoBase64','')) or LOGO_B64
     try:
-        logo = RLImage(io.BytesIO(base64.b64decode(ngha_b64)), width=20*mm, height=20*mm)
+        logo = RLImage(io.BytesIO(base64.b64decode(ngha_b64)), width=18*mm, height=18*mm)
     except:
         logo = P('NGHA', 8, align=TA_CENTER)
 
-    # Header row
-    hdr_tbl = Table([[[
-        P('Kingdom of Saudi Arabia', 8),
-        P('Ministry of National Guard of Health Affairs', 8)
-    ], logo, [
-        P('المملكة العربية السعودية', 8, align=TA_RIGHT),
-        P('الشؤون الصحية بوزارة الحرس الوطني', 8, align=TA_RIGHT)
-    ]]], colWidths=[W*0.35, W*0.30, W*0.35])
-    hdr_tbl.setStyle(TableStyle([
-        ('ALIGN',(0,0),(0,0),'LEFT'),('ALIGN',(1,0),(1,0),'CENTER'),('ALIGN',(2,0),(2,0),'RIGHT'),
+    # ── Header: left text | logo | right Arabic ───────────────────────────
+    hdr = Table([[
+        [P('Kingdom of Saudi Arabia', 8),
+         P('Ministry of National Guard of Health Affairs', 8)],
+        logo,
+        [P('المملكة العربية السعودية', 8, align=TA_RIGHT),
+         P('الشؤون الصحية بوزارة الحرس الوطني', 8, align=TA_RIGHT)]
+    ]], colWidths=[W*0.37, W*0.26, W*0.37])
+    hdr.setStyle(TS([
+        ('ALIGN',(0,0),(0,0),'LEFT'),
+        ('ALIGN',(1,0),(1,0),'CENTER'),
+        ('ALIGN',(2,0),(2,0),'RIGHT'),
         ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-        ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('TOPPADDING',(0,0),(-1,-1),2),
+        ('BOTTOMPADDING',(0,0),(-1,-1),2),
     ]))
-    story.append(hdr_tbl)
-    story.append(HRFlowable(width=W, thickness=1, color=DG, spaceAfter=2*mm))
-    story.append(P('<b>International Recruitment Application Form</b>', 13, bold=True, align=TA_CENTER, color=DG))
-    story.append(Spacer(1, 3*mm))
+    story.append(hdr)
+    story.append(HRFlowable(width=W, thickness=0.8, color=BLK, spaceAfter=1*mm))
+    story.append(Spacer(1,1*mm))
+    story.append(P('<b>International Recruitment Application Form</b>', 12, bold=True, align=TA_CENTER))
+    story.append(Spacer(1,2*mm))
 
-    # Date + Location + Position/Photo
-    loc_all = ['Riyadh','Jeddah','Madinah','Al Ahsa','Dammam','PHCs','No Preference']
-    loc_row1 = [P(chk(l, l in locations), 8) for l in loc_all[:4]]
-    loc_row2 = [P(chk(l, l in locations), 8) for l in loc_all[4:]] + [P('',8)]
-    loc_tbl = Table([loc_row1, loc_row2], colWidths=[W*0.16]*4)
-    loc_tbl.setStyle(TableStyle([
-        ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),
-    ]))
-
-    left_data = [
-        [P(f"<b>Date of Application:</b>  {app_date}", 8), ''],
-        [P('<b>Preferred location for employment</b>', 8), ''],
-        [loc_tbl, ''],
+    # ── Top section: Date+Location LEFT | Position/Photo RIGHT ───────────
+    # Preferred location checkboxes — exactly as original
+    loc_row1 = [
+        P(chk('Riyadh',   'Riyadh'   in locations), 8),
+        P(chk('Jeddah',   'Jeddah'   in locations), 8),
+        P(chk('Madinah',  'Madinah'  in locations), 8),
     ]
-    left_t = Table(left_data, colWidths=[W*0.62, W*0.03])
-    left_t.setStyle(TableStyle([
-        ('SPAN',(0,0),(1,0)),('SPAN',(0,1),(1,1)),('SPAN',(0,2),(1,2)),
-        ('BOX',(0,0),(1,2),0.3,MG),
+    loc_row2 = [
+        P(chk('Al Ahsa',  'Al Ahsa'  in locations), 8),
+        P(chk('Dammam',   'Dammam'   in locations), 8),
+        P(chk('PHCs',     'PHCs'     in locations), 8),
+    ]
+    loc_row3 = [
+        P(chk('No Preference', 'No Preference' in locations), 8),
+        P('',8), P('',8)
+    ]
+    loc_tbl = Table([loc_row1, loc_row2, loc_row3],
+                    colWidths=[W*0.33*0.6]*3)
+    loc_tbl.setStyle(TS([
+        ('TOPPADDING',(0,0),(-1,-1),2),
+        ('BOTTOMPADDING',(0,0),(-1,-1),2),
+    ]))
+
+    left_col = Table([
+        [P(f'Date of Application :   {app_date or "DD / MM / YYYY"}', 8)],
+        [P('Preferred location for employment', 8)],
+        [loc_tbl],
+    ], colWidths=[W*0.50])
+    left_col.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),
+        ('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+    ]))
+
+    # Right col: Position/Specialty/Availability/Referred | Photo
+    pos_rows = Table([
+        [P('Position you are applying for :', 8), P(position, 8)],
+        [P('Area of Speciality :', 8), P(specialty, 8)],
+        [P('Availability :', 8), P(avail, 8)],
+        [P('Referred by : (Name & Badge No.)', 8), P('N/A', 8)],
+    ], colWidths=[W*0.22, W*0.16])
+    pos_rows.setStyle(TS([
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),
+        ('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('BACKGROUND',(0,0),(0,-1),LGY),
+    ]))
+
+    photo_box = Table([[P('Photo', 9, align=TA_CENTER, col=colors.grey)]],
+                      colWidths=[W*0.12], rowHeights=[W*0.12])
+    photo_box.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.4,MGY),
+        ('ALIGN',(0,0),(-1,-1),'CENTER'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    ]))
+
+    right_top = Table([[pos_rows, photo_box]], colWidths=[W*0.38, W*0.12])
+    right_top.setStyle(TS([('VALIGN',(0,0),(-1,-1),'TOP')]))
+
+    top_row = Table([[left_col, right_top]], colWidths=[W*0.50, W*0.50])
+    top_row.setStyle(TS([('VALIGN',(0,0),(-1,-1),'TOP')]))
+    story.append(top_row)
+    story.append(Spacer(1,2*mm))
+
+    # ── Recruitment Source ────────────────────────────────────────────────
+    rec_left = Table([
+        [P('Recruitment Source :', 8), P('',8)],
+        [P(chk('Agency', True), 8),   P(chk('Internet', False), 8)],
+        [P(chk('Local',  False), 8),  P(chk('Referred', False), 8)],
+        [P(chk('Rehire', False), 8),  P(chk('Other',   False), 8)],
+    ], colWidths=[W*0.22, W*0.18])
+    rec_left.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.4,MGY),
+        ('SPAN',(0,0),(1,0)),
         ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
 
-    photo_tbl = Table([[P('Photo', 9, align=TA_CENTER, color=colors.grey)]],
-                      colWidths=[28*mm], rowHeights=[35*mm])
-    photo_tbl.setStyle(TableStyle([
-        ('BOX',(0,0),(-1,-1),0.5,MG),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
-    ]))
-
-    pos_tbl = Table([
-        [P('<b>Position you are applying for:</b>', 8), P(position, 8)],
-        [P('<b>Area of Speciality:</b>', 8), P(specialty, 8)],
-        [P('<b>Availability:</b>', 8), P(availability, 8)],
-    ], colWidths=[W*0.20, W*0.13])
-    pos_tbl.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.3,MG),
+    rec_right = Table([
+        [P('Referred by : (Name & Badge No.)', 8)],
+        [P('N/A', 8)],
+    ], colWidths=[W*0.60])
+    rec_right.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.4,MGY),
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
 
-    right_col = Table([[pos_tbl],[photo_tbl]], colWidths=[W*0.35])
-    right_col.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))
+    rec_row = Table([[rec_left, rec_right]], colWidths=[W*0.40, W*0.60])
+    rec_row.setStyle(TS([('VALIGN',(0,0),(-1,-1),'TOP')]))
+    story.append(rec_row)
+    story.append(Spacer(1,2*mm))
 
-    top_row = Table([[left_t, right_col]], colWidths=[W*0.65, W*0.35])
-    top_row.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))
-    story.append(top_row)
-    story.append(Spacer(1, 2*mm))
+    # ── Personal Data ─────────────────────────────────────────────────────
+    story.append(Table([[P('<b>Personal Data :</b> (Please print clearly)', 9, bold=True)]],
+        colWidths=[W]))
+    story.append(Spacer(1,1*mm))
 
-    # Recruitment source
-    rec_tbl = Table([
-        [P('<b>Recruitment Source:</b>', 8),
-         P(chk('Agency', True), 8), P(chk('Internet', False), 8),
-         P(chk('Local', False), 8), P('<b>Referred by:</b>', 8), P('N/A', 8)],
-        ['', P(chk('Referred', False), 8), P(chk('Rehire', False), 8),
-         P(chk('Other', False), 8), '', ''],
-    ], colWidths=[W*0.20, W*0.12, W*0.12, W*0.12, W*0.20, W*0.24])
-    rec_tbl.setStyle(TableStyle([
-        ('BOX',(0,0),(3,1),0.3,MG),('BOX',(4,0),(5,1),0.3,MG),
-        ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),
-        ('LEFTPADDING',(0,0),(-1,-1),4),
-    ]))
-    story.append(rec_tbl)
-    story.append(Spacer(1, 2*mm))
+    LW = W*0.30  # label col
+    VW = W*0.20  # value col
+    RLW = W*0.28 # right label
+    RVW = W*0.22 # right value
 
-    # Personal Data section
-    story.append(sec_hdr('Personal Data: (Please print clearly)'))
-    story.append(Spacer(1, 1*mm))
-
-    name_parts = full_name.split()
-    first_name  = name_parts[0] if name_parts else ''
-    family_name = name_parts[-1] if len(name_parts)>1 else ''
-
-    pd_data = [
-        [P('<b>First Name:</b>', 8), P(first_name, 8),
-         P('<b>Permanent Address:</b>', 8), P(AN_ADDR, 7)],
-        [P('<b>Second Name:</b>', 8), P('', 8), P('', 8), P('', 8)],
-        [P('<b>Family Name:</b>', 8), P(family_name, 8),
-         P('<b>Telephone No.:</b>', 8), P(AN_PHONE, 8)],
-        [P('<b>Gender:</b>', 8), P(gender, 8),
-         P('<b>Mobile No.:</b>', 8), P(AN_PHONE, 8)],
-        [P('<b>Nationality:</b>', 8), P(nationality, 8),
-         P('<b>Current Address:</b>', 8),
-         P('<i>(No need to fill if same as permanent)</i>', 7, color=colors.grey)],
-        [P('<b>Date of Birth (DD-MM-YYYY):</b>', 8), P(dob, 8),
-         P('<b>Age:</b>', 8), P(age, 8)],
-        [P('<b>Place of Birth (include Country):</b>', 8), P(place_birth, 8),
-         P('<b>Telephone No./Mobile No.:</b>', 8), P(AN_PHONE, 8)],
-        [P('<b>Height (in cm):</b>', 8), P(height, 8),
-         P('<b>Weight (in kgs.):</b>', 8), P(weight, 8)],
-        [P('<b>Marital Status:</b>', 8), P(marital, 8),
-         P('<b>Email Address:</b>', 8), P(AN_EMAIL, 8)],
-        [P('<b>Name of Spouse:</b>', 8), P(spouse_name, 8),
+    pd = [
+        # row: left_label, left_val, right_label, right_val
+        [P('First Name :', 8),     P(first_name, 8),
+         P('Permanent Address :', 8), P(AN_ADDR, 7)],
+        [P('Second Name :', 8),    P('', 8),   P('', 8), P('', 8)],
+        [P('Family Name :', 8),    P(family_name, 8),
+         P('Telephone No. :', 8),  P(AN_PHONE, 8)],
+        [P('Gender :', 8),         P(gender, 8),
+         P('Mobile No. :', 8),     P(AN_PHONE, 8)],
+        [P('Religion :', 8),       P(s(data.get('religion','')), 8),
+         P('Current Address :', 8),
+         P('(No need to fill the current address\nif it is the same as the permanent).', 7)],
+        [P('Nationality :', 8),    P(nationality, 8),
+         P('', 8), P('', 8)],
+        [P('Date of Birth\n(DD-MM-YYYY) :', 8), P(dob, 8),
+         P('Age :', 8),            P(age, 8)],
+        [P('Place of Birth :\n(include Country)', 8), P(place_birth, 8),
+         P('Telephone No./Mobile No. :', 8), P(AN_PHONE, 8)],
+        [P('Height (in cm) :', 8), P(height, 8),
+         P('Weight (in kgs.) :', 8), P(weight, 8)],
+        [P('Marital Status :', 8), P(marital, 8),
+         P('Email Address :', 8),  P(AN_EMAIL, 8)],
+        [P('Name of spouse :', 8), P(f"{spouse_name}  (Last name, first name)", 8),
          P('', 8), P('', 8)],
     ]
-    pd_tbl = Table(pd_data, colWidths=[W*0.28, W*0.22, W*0.25, W*0.25])
-    pd_tbl.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.3,MG),
-        ('SPAN',(2,0),(3,0)),('SPAN',(2,1),(3,1)),
-        ('BACKGROUND',(0,0),(0,-1),LG),('BACKGROUND',(2,2),(2,-1),LG),
-        ('BACKGROUND',(2,0),(2,0),LG),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-        ('LEFTPADDING',(0,0),(-1,-1),4),
+
+    pd_tbl = Table(pd, colWidths=[LW, VW, RLW, RVW])
+    pd_tbl.setStyle(TS([
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('BACKGROUND',(0,0),(0,-1),LGY),
+        ('BACKGROUND',(2,0),(2,-1),LGY),
+        ('SPAN',(2,0),(3,0)),   # Permanent Address spans right cols
+        ('SPAN',(2,4),(3,4)),   # Current address note spans
+        ('SPAN',(2,5),(3,5)),   # blank row right spans
+        ('SPAN',(2,10),(3,10)), # Name of spouse right blank
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ('VALIGN',(2,0),(3,0),'TOP'),
+        ('VALIGN',(2,4),(3,4),'TOP'),
+        ('TOPPADDING',(0,0),(-1,-1),3),
+        ('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
     story.append(pd_tbl)
 
-    # Spouse/Iqama/Emergency rows
-    extra_data = [
-        [P('<b>Is your Spouse living in the Kingdom?</b>', 8),
+    # Spouse / Iqama / Emergency
+    se_data = [
+        [P('Is your Spouse living in the Kingdom?', 8),
          P(f"{chk('Yes', spouse_king=='Yes')}    {chk('No', spouse_king=='No')}", 8),
-         P('<b>Company/Sponsor:</b>', 8), P(sponsor, 8)],
-        [P('<b>Iqama/Residency Permit No.:</b>', 8), P(iqama, 8),
-         P('<b>Visa Type:</b>', 8),
+         P('Company/Sponsor :', 8),
+         P(sponsor, 8)],
+        [P('Iqama/Residency Permit No. :', 8),
+         P(iqama, 8),
+         P('Visa Type :', 8),
          P(f"{chk('Work', visa_type=='Work')}  {chk('Dependent', visa_type=='Dependent')}  {chk('Visit', visa_type=='Visit')}", 8)],
-        [P('<b>Emergency Contact Person:</b>', 8), P(emg_contact, 8),
-         P('<b>Mobile No.:</b>', 8), P(emg_mobile, 8)],
+        [P('Emergency Contact\nPerson :', 8),
+         P(f"{emg_contact}", 8),
+         P('Mobile No. :', 8),
+         P(emg_mobile, 8)],
     ]
-    extra_tbl = Table(extra_data, colWidths=[W*0.28, W*0.22, W*0.25, W*0.25])
-    extra_tbl.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.3,MG),
-        ('BACKGROUND',(0,0),(0,-1),LG),('BACKGROUND',(2,0),(2,-1),LG),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+    se_tbl = Table(se_data, colWidths=[LW, VW, RLW, RVW])
+    se_tbl.setStyle(TS([
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('BACKGROUND',(0,0),(0,-1),LGY),
+        ('BACKGROUND',(2,0),(2,-1),LGY),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('TOPPADDING',(0,0),(-1,-1),3),
+        ('BOTTOMPADDING',(0,0),(-1,-1),3),
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
-    story.append(extra_tbl)
-    story.append(Spacer(1, 2*mm))
+    story.append(se_tbl)
+    story.append(Spacer(1,2*mm))
 
-    # Qualifications table
-    story.append(sec_hdr('Qualifications: (Please attach copies of all qualifications listed below)'))
-    story.append(Spacer(1, 1*mm))
-    qrows = []
-    for q in (quals or [])[:4]:
-        qrows.append([s(q.get('institution','')), s(q.get('country','')),
-                      s(q.get('dateFrom','')), s(q.get('dateTo','')), s(q.get('degree',''))])
-    while len(qrows) < 4: qrows.append(['','','','',''])
-    story.append(dt(['Name of College/University','Country','From','To','Qualification Gained'],
-                    qrows, [W*0.35, W*0.15, W*0.13, W*0.13, W*0.24]))
-    story.append(Spacer(1, 2*mm))
+    # ── Qualifications ────────────────────────────────────────────────────
+    story.append(Table([[P('<b>Qualifications :</b> (Please attach copies of all qualifications listed below)', 9, bold=True)]],
+        colWidths=[W]))
 
-    # Licensing table
-    lrows = []
-    for l in (lics or [])[:3]:
-        lrows.append([s(l.get('authority','')), s(l.get('country','')),
-                      s(l.get('licenseNo','')), s(l.get('expiryDate',''))])
-    while len(lrows) < 3: lrows.append(['','','',''])
-    story.append(dt(['Professional Licensing Body','Country','License/Registration No.','Expiration Date'],
-                    lrows, [W*0.35, W*0.15, W*0.30, W*0.20]))
+    qhdrs = [P('<b>Name of College/University</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Country</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Date Attended</b>\n<b>From</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>To</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Qualification Gained</b>',8,bold=True,align=TA_CENTER,col=WHT)]
+    qrows = [qhdrs]
+    for q in (quals[:4] if quals else []):
+        qrows.append([P(s(q.get('institution','')),8), P(s(q.get('country','')),8),
+                      P(s(q.get('dateFrom','')),8), P(s(q.get('dateTo','')),8),
+                      P(s(q.get('degree','')),8)])
+    while len(qrows) < 5: qrows.append([P('',8),P('',8),P('',8),P('',8),P('',8)])
+
+    q_tbl = Table(qrows, colWidths=[W*0.35,W*0.13,W*0.13,W*0.13,W*0.26])
+    q_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('ALIGN',(0,0),(-1,0),'CENTER'),
+    ]))
+    story.append(q_tbl)
+    story.append(Spacer(1,2*mm))
+
+    # ── Professional Licensing ────────────────────────────────────────────
+    lhdrs = [P('<b>Professional Licensing Body</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Country</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>License/Registration No.</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Expiration Date</b>',8,bold=True,align=TA_CENTER,col=WHT)]
+    lrows = [lhdrs]
+    for l in (lics[:3] if lics else []):
+        lrows.append([P(s(l.get('authority','')),8), P(s(l.get('country','')),8),
+                      P(s(l.get('licenseNo','')),8), P(s(l.get('expiryDate','')),8)])
+    while len(lrows) < 4: lrows.append([P('',8),P('',8),P('',8),P('',8)])
+
+    l_tbl = Table(lrows, colWidths=[W*0.35,W*0.15,W*0.28,W*0.22])
+    l_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('ALIGN',(0,0),(-1,0),'CENTER'),
+    ]))
+    story.append(l_tbl)
+
+    # Page 1 footer
+    story.append(Spacer(1,3*mm))
+    story.append(HRFlowable(width=W, thickness=0.4, color=MGY))
+    story.append(P('Non-Clinical Form    Rev. 12/2023    Ref# APP 1423-02, Appendix D    Page 1 of 2    APP 1427-18, Appendix C    CPRA # 0601-1158',
+                   7, align=TA_CENTER, col=colors.grey))
 
     # ═══════════════════════════════════════════════════════════════════════
     # PAGE 2
     # ═══════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
 
-    # Training table
-    trows = []
-    for t in (trains or [])[:4]:
-        trows.append([s(t.get('discipline','')), s(t.get('dateFrom','')), s(t.get('courseTitle',''))])
-    while len(trows) < 4: trows.append(['','',''])
-    story.append(dt(['Trainings Attended','Date Attended','Course Title'],
-                    trows, [W*0.45, W*0.20, W*0.35]))
-    story.append(Spacer(1, 2*mm))
+    # ── Trainings ─────────────────────────────────────────────────────────
+    thdrs = [P('<b>Trainings Attended</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Date Attended</b>',8,bold=True,align=TA_CENTER,col=WHT),
+             P('<b>Course Title</b>',8,bold=True,align=TA_CENTER,col=WHT)]
+    trows = [thdrs]
+    for t in (trains[:4] if trains else []):
+        trows.append([P(s(t.get('discipline','')),8),
+                      P(s(t.get('dateFrom','')),8),
+                      P(s(t.get('courseTitle','')),8)])
+    while len(trows) < 5: trows.append([P('',8),P('',8),P('',8)])
 
-    # Employment history
-    story.append(sec_hdr('Employment History: (Start from current or most recent employment and attach a detailed CV/resume)'))
-    story.append(Spacer(1, 1*mm))
-    erows = []
-    for e in (exps or [])[:5]:
-        erows.append([s(e.get('institution','')), s(e.get('dateFrom','')),
-                      s(e.get('dateTo','')), s(e.get('position','')), s(e.get('wardUnit',''))])
-    while len(erows) < 5: erows.append(['','','','',''])
-    story.append(dt(['Hospital/Company/Employer Name & Address (Include Country)','From','To','Last Position Held/Job Title','Ward/Unit/Department'],
-                    erows, [W*0.35, W*0.10, W*0.10, W*0.25, W*0.20]))
-    story.append(Spacer(1, 2*mm))
+    t_tbl = Table(trows, colWidths=[W*0.45,W*0.20,W*0.35])
+    t_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    ]))
+    story.append(t_tbl)
+    story.append(Spacer(1,3*mm))
 
-    # Employment status
-    emp_data = [
-        [P('<b>Last Date of Employment:</b>', 8), P(date_left, 8), P('', 8), P('', 8)],
-        [P('<b>Are you currently employed?</b>', 8),
-         P(f"{chk('Yes', employed=='Yes')}    {chk('No', employed=='No')}", 8),
-         P('<b>Date left (last employment):</b>', 8), P(date_left, 8)],
+    # ── Employment History ────────────────────────────────────────────────
+    story.append(Table([[P('<b>Employment History :</b> (Start from current or most recent employment and attach a detailed CV/resume supporting this)', 9, bold=True)]],
+        colWidths=[W]))
+    story.append(Spacer(1,1*mm))
+
+    ehdrs = [
+        P('<b>Hospital/Company/Employer Name & Address</b>\n<b>(Include Country)</b>\n<b>(No. of Hospital beds, if applicable)</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Dates Employed</b>\n<b>From</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>To</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Last Position Held/Job\nTitle</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Ward/Unit/\nDepartment</b>\n<b>(No. of beds in unit/\nNurse to patient ratio,\nif applicable)</b>', 8, bold=True, align=TA_CENTER, col=WHT),
     ]
-    emp_tbl = Table(emp_data, colWidths=[W*0.30, W*0.20, W*0.28, W*0.22])
-    emp_tbl.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.3,MG),
-        ('SPAN',(1,0),(3,0)),
-        ('BACKGROUND',(0,0),(0,-1),LG),('BACKGROUND',(2,1),(2,1),LG),
+    erows = [ehdrs]
+    for e in (exps[:5] if exps else []):
+        erows.append([P(s(e.get('institution','')),8),
+                      P(s(e.get('dateFrom','')),8),
+                      P(s(e.get('dateTo','')),8),
+                      P(s(e.get('position','')),8),
+                      P(s(e.get('wardUnit','')),8)])
+    while len(erows) < 6: erows.append([P('',8),P('',8),P('',8),P('',8),P('',8)])
+
+    e_tbl = Table(erows, colWidths=[W*0.35,W*0.11,W*0.11,W*0.23,W*0.20])
+    e_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    ]))
+    story.append(e_tbl)
+    story.append(Spacer(1,2*mm))
+
+    # Last Date / Currently Employed
+    emp_tbl = Table([
+        [P('<b>Last Date of Employment :</b>', 8), P(date_left, 8)],
+        [P(f"Are you currently employed ?    {chk('Yes', employed=='Yes')}    {chk('No', employed=='No')}", 8),
+         P(f"Date left (last employment) :    {date_left}", 8)],
+    ], colWidths=[W*0.50, W*0.50])
+    emp_tbl.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.4,MGY),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('SPAN',(0,0),(0,0)),
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
     story.append(emp_tbl)
-    story.append(Spacer(1, 2*mm))
+    story.append(Spacer(1,3*mm))
 
-    # Work References
-    story.append(sec_hdr('Work Related Reference who may be contacted:'))
-    story.append(Spacer(1, 1*mm))
-    ref_data = []
-    for i, ref in enumerate((refs or [])[:2]):
-        rn  = s(ref.get('name',''))
-        rt  = s(ref.get('jobTitle',''))
-        rw  = s(ref.get('work',''))
-        re  = s(ref.get('email',''))
-        rc  = s(ref.get('consent',''))
-        consent_str = chk('Yes', rc=='Yes') if rc=='Yes' else chk('No — will not be contacted until consent is sought', True)
-        ref_data.append([P(rn, 8), P(rt, 8),
-                         P(f"Work: {rw}\nEmail: {re}", 8),
-                         P(consent_str, 8)])
-    while len(ref_data) < 2: ref_data.append([P('',8),P('',8),P('',8),P('',8)])
-    ref_tbl = Table([[P('<b>Name</b>',8,bold=True,align=TA_CENTER,color=WHT),
-                      P('<b>Position/Job Title</b>',8,bold=True,align=TA_CENTER,color=WHT),
-                      P('<b>Contact Information</b>',8,bold=True,align=TA_CENTER,color=WHT),
-                      P('<b>Consent to Contact</b>',8,bold=True,align=TA_CENTER,color=WHT)]] + ref_data,
-                    colWidths=[W*0.20, W*0.20, W*0.35, W*0.25])
-    ref_tbl.setStyle(TableStyle([
-        ('BACKGROUND',(0,0),(-1,0),DG),
-        ('ROWBACKGROUNDS',(0,1),(-1,-1),[WHT,LG]),
-        ('GRID',(0,0),(-1,-1),0.3,MG),
+    # ── Work References ───────────────────────────────────────────────────
+    story.append(Table([[P('<b>Work Related Reference who may be contacted :</b>', 9, bold=True)]],
+        colWidths=[W]))
+    story.append(Spacer(1,1*mm))
+
+    ref_hdrs = [
+        P('<b>Name</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Position/Job Title</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Contact Information\n(Include country & area codes)</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Consent to Contact</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+    ]
+    ref_rows = [ref_hdrs]
+
+    for ref in (refs[:2] if refs else [{'name':'','jobTitle':'','work':'','email':'','consent':''}]*2):
+        rn = s(ref.get('name',''))
+        rt = s(ref.get('jobTitle',''))
+        rw = s(ref.get('work',''))
+        re = s(ref.get('email',''))
+        rc = s(ref.get('consent',''))
+        consent_val = chk('Yes', rc=='Yes') + '\n' + chk('No (will not be contacted\nuntil consent is sought)', rc!='Yes')
+        ref_rows.append([
+            P(rn, 8),
+            P(rt, 8),
+            Table([
+                [P('Home :', 8), P('', 8)],
+                [P('Work :', 8), P(rw, 8)],
+                [P('Email :', 8), P(re, 8)],
+            ], colWidths=[W*0.07, W*0.22]),
+            P(consent_val, 8),
+        ])
+
+    ref_tbl = Table(ref_rows, colWidths=[W*0.20, W*0.20, W*0.29+W*0.07, W*0.24])
+    ref_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
-        ('LEFTPADDING',(0,0),(-1,-1),4),('VALIGN',(0,0),(-1,-1),'TOP'),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'TOP'),
     ]))
     story.append(ref_tbl)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1,3*mm))
 
-    # Authorization
-    story.append(P('<b>Authorization</b>', 9, bold=True, align=TA_CENTER))
-    story.append(Spacer(1, 2*mm))
+    # ── Authorization ─────────────────────────────────────────────────────
+    story.append(P('<b>Authorization</b>', 10, bold=True, align=TA_CENTER))
+    story.append(Spacer(1,2*mm))
     story.append(P(
         "I hereby authorize the Recruitment Services of Ministry of National Guard Health Affairs to request and obtain "
-        "details held about me from any organization, in order to exercise due diligence verifying the documents and "
-        "details I have submitted to its office in support of my educational qualifications and experience.\n\n"
-        "I understand that these organizations can include academic institutions, professional medical bodies, licensing "
-        "and registration bodies and my current and previous employers, including referees.\n\n"
+        "details held about me from any organization, in order to exercise due diligence verifying the documents and details "
+        "I have submitted to its office in support of my educational qualifications and experience.\n\n"
+        "I understand that these organizations can include academic institutions, professional medical bodies, licensing and "
+        "registration bodies and my current and previous employers, including referees.\n\n"
         "Furthermore, I declare that all the information that I have given above is correct to the best of my knowledge. "
-        "I understand that I could have my contract terminated (or my offer of employment cancelled); if it is found that "
-        "I have deliberately given false or misleading information or if my professional license is revoked during or "
-        "after the application process.", 8))
-    story.append(Spacer(1, 4*mm))
+        "I understand that I could have my contract terminated (or my offer of employment cancelled); if it is found that I "
+        "have deliberately given false or misleading information or if my professional license is revoked during or after the "
+        "application process.", 8))
+    story.append(Spacer(1,4*mm))
 
-    sig_tbl = Table([
-        [P('<b>Signature of Applicant:</b>', 8), P('', 8), P('<b>Date:</b>', 8), P('', 8)],
-    ], colWidths=[W*0.35, W*0.15, W*0.15, W*0.35])
-    sig_tbl.setStyle(TableStyle([
+    sig_tbl = Table([[
+        P('<b>Signature of Applicant :</b>', 8), P('', 8),
+        P('<b>Date :</b>', 8), P('', 8),
+    ]], colWidths=[W*0.30, W*0.20, W*0.15, W*0.35])
+    sig_tbl.setStyle(TS([
         ('LINEBELOW',(1,0),(1,0),0.5,BLK),
         ('LINEBELOW',(3,0),(3,0),0.5,BLK),
-        ('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8),
+        ('TOPPADDING',(0,0),(-1,-1),8),
+        ('BOTTOMPADDING',(0,0),(-1,-1),8),
     ]))
     story.append(sig_tbl)
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1,2*mm))
     story.append(P("As an essential function and responsibility of a recruitment agency, I confirm that primary source "
                    "verification of the above applicant's license, qualification & experience will be implemented when offer released.", 8))
-    story.append(Spacer(1, 3*mm))
+    story.append(Spacer(1,3*mm))
 
-    # Agency info
-    agency_data = [
-        [P('<b>Recruitment Agency Information: (If applicable)</b>', 8, bold=True), '', '', ''],
-        [P('<b>Name of Recruitment Agency:</b>', 8), P(AN_NAME, 8), '', ''],
-        [P('<b>Recruiter Name:</b>', 8), P(AN_NAME, 8), P('<b>Email:</b>', 8), P(AN_EMAIL, 8)],
-        [P('<b>Agency Signature:</b>', 8), P('', 8), P('<b>Date:</b>', 8), P(app_date, 8)],
-    ]
-    agency_tbl = Table(agency_data, colWidths=[W*0.28, W*0.22, W*0.25, W*0.25])
-    agency_tbl.setStyle(TableStyle([
-        ('SPAN',(0,0),(3,0)),('SPAN',(1,1),(3,1)),
-        ('GRID',(0,0),(-1,-1),0.3,MG),
-        ('BACKGROUND',(0,0),(-1,0),LG),
-        ('BACKGROUND',(0,1),(0,-1),LG),('BACKGROUND',(2,2),(2,3),LG),
-        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
+    # ── Recruitment Agency Info ───────────────────────────────────────────
+    agency_tbl = Table([
+        [P('<b>Recruitment Agency Information :</b> (If applicable)', 8, bold=True), '', '', ''],
+        [P('Name of Recruitment Agency :', 8), P(AN_NAME, 8), '', ''],
+        [P('Recruiter Name :', 8), P(AN_NAME, 8), P('Email :', 8), P(AN_EMAIL, 8)],
+        [P('Agency Signature :', 8), P('', 8), P('Date :', 8), P(app_date, 8)],
+    ], colWidths=[LW, VW, RLW, RVW])
+    agency_tbl.setStyle(TS([
+        ('SPAN',(0,0),(3,0)), ('SPAN',(1,1),(3,1)),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('BACKGROUND',(0,0),(-1,0),LGY),
+        ('BACKGROUND',(0,1),(0,-1),LGY),
+        ('BACKGROUND',(2,2),(2,-1),LGY),
+        ('TOPPADDING',(0,0),(-1,-1),4),
+        ('BOTTOMPADDING',(0,0),(-1,-1),4),
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
     story.append(agency_tbl)
-    story.append(Spacer(1, 3*mm))
-    story.append(HRFlowable(width=W, thickness=0.5, color=MG))
-    story.append(P('Non-Clinical Form    Rev. 12/2023    Ref# APP 1423-02, Appendix D    Page 1 of 2    APP 1427-18, Appendix C    CPRA # 0601-1158', 7, align=TA_CENTER, color=colors.grey))
+    story.append(Spacer(1,2*mm))
+    story.append(P('<b>THANK YOU FOR TAKING THE TIME TO COMPLETE THIS APPLICATION FORM. PLEASE NOTE THAT APPLICATIONS EXPIRE AFTER ONE YEAR.</b>',
+                   8, bold=True, align=TA_CENTER))
+    story.append(Spacer(1,3*mm))
+    story.append(HRFlowable(width=W, thickness=0.4, color=MGY))
+    story.append(P('Non-Clinical Form    Rev. 12/2023    Ref# APP 1423-02, Appendix D    Page 2 of 2    APP 1427-18, Appendix C    CPRA # 0601-1158',
+                   7, align=TA_CENTER, col=colors.grey))
 
     # ═══════════════════════════════════════════════════════════════════════
-    # PAGE 3 — DISCLOSURE FORM
+    # PAGE 3 — DISCLOSURE FORM FOR NEW APPLICANTS
     # ═══════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
 
-    story.append(P('<b>Kingdom of Saudi Arabia</b>', 9, bold=True))
-    story.append(P('Ministry of National Guard Health Affairs', 8))
-    story.append(Spacer(1, 3*mm))
-    story.append(P('<b>Disclosure Form For New Applicants</b>', 12, bold=True, align=TA_CENTER, color=DG))
-    story.append(HRFlowable(width=W, thickness=1, color=DG, spaceAfter=2*mm))
-    story.append(P('<b>Part I</b> - To be completed by the Applicant', 9, bold=True, align=TA_CENTER))
-    story.append(Spacer(1, 3*mm))
+    # Header
+    disc_hdr = Table([[
+        [P('Kingdom of Saudi Arabia', 8),
+         P('Ministry of National Guard Health Affairs', 8)],
+        logo,
+        [P('المملكة العربية السعودية', 8, align=TA_RIGHT),
+         P('الشؤون الصحية بوزارة الحرس الوطني', 8, align=TA_RIGHT)]
+    ]], colWidths=[W*0.37, W*0.26, W*0.37])
+    disc_hdr.setStyle(TS([
+        ('ALIGN',(0,0),(0,0),'LEFT'),('ALIGN',(1,0),(1,0),'CENTER'),('ALIGN',(2,0),(2,0),'RIGHT'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),
+    ]))
+    story.append(disc_hdr)
+    story.append(HRFlowable(width=W, thickness=0.8, color=BLK, spaceAfter=2*mm))
+    story.append(Spacer(1,2*mm))
+    story.append(P('<b>Disclosure Form For New Applicants</b>', 13, bold=True, align=TA_CENTER))
+    story.append(Spacer(1,3*mm))
 
-    disc_hdr_data = [
-        [P('<b>Position Applied For:</b>', 8), P(position, 8),
-         P('<b>Gender:</b>', 8),
+    story.append(Table([[P('<b>Part I</b> - To be completed by the Applicant', 9, bold=True, align=TA_CENTER)]],
+        colWidths=[W]))
+    story.append(Spacer(1,3*mm))
+
+    disc_info = Table([
+        [P('Position Applied For :', 8), P(position, 8),
+         P('Gender :', 8),
          P(f"{chk('Male', gender=='Male')}    {chk('Female', gender=='Female')}", 8)],
-        [P('<b>Nationality:</b>', 8), P(nationality, 8), P('', 8), P('', 8)],
-        [P('<b>Postal Address:</b>', 8), P(AN_ADDR, 7), P('', 8), P('', 8)],
-        [P('<b>Phone No. Including Country Code:</b>', 8), P(AN_PHONE, 8),
-         P('<b>E-mail:</b>', 8), P(AN_EMAIL, 8)],
-    ]
-    disc_hdr_tbl = Table(disc_hdr_data, colWidths=[W*0.28, W*0.22, W*0.25, W*0.25])
-    disc_hdr_tbl.setStyle(TableStyle([
-        ('GRID',(0,0),(-1,-1),0.3,MG),
-        ('SPAN',(1,1),(3,1)),('SPAN',(1,2),(3,2)),
-        ('BACKGROUND',(0,0),(0,-1),LG),('BACKGROUND',(2,0),(2,0),LG),('BACKGROUND',(2,3),(2,3),LG),
+        [P('Nationality', 8), P(f": {nationality}", 8), P('', 8), P('', 8)],
+        [P('Postal Address', 8),
+         P(f": Office 109, 1st Floor, Al Hafeez Executive, Ali Zeb Road, Gulberg 3, Lahore, Pakistan", 8),
+         P('', 8), P('', 8)],
+        [P('Phone No. Including Country Code :', 8), P(AN_PHONE, 8),
+         P('E-mail :', 8), P(AN_EMAIL, 8)],
+    ], colWidths=[LW, VW, RLW, RVW])
+    disc_info.setStyle(TS([
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('SPAN',(1,1),(3,1)),
+        ('SPAN',(1,2),(3,2)),
+        ('BACKGROUND',(0,0),(0,-1),LGY),
+        ('BACKGROUND',(2,0),(2,0),LGY),
+        ('BACKGROUND',(2,3),(2,3),LGY),
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3),
         ('LEFTPADDING',(0,0),(-1,-1),4),
-        ('VALIGN',(1,2),(1,2),'TOP'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
     ]))
-    story.append(disc_hdr_tbl)
-    story.append(Spacer(1, 3*mm))
+    story.append(disc_info)
+    story.append(Spacer(1,3*mm))
 
-    story.append(P('I disclose herewith all my relationships and affiliations with those currently employed in all Ministry of National Guard Health Affairs facilities*.', 8))
-    story.append(Spacer(1, 2*mm))
+    story.append(P("I disclose herewith all my relationships and affiliations with those currently employed in all Ministry of National Guard Health Affairs facilities*.", 8))
+    story.append(Spacer(1,3*mm))
     story.append(P('<b>Relatives / Acquaintances working for Ministry of National Guard Health Affairs:</b>', 8, bold=True))
-    story.append(Spacer(1, 2*mm))
+    story.append(Spacer(1,2*mm))
 
-    # Disclosure table — all string cells
-    disc_rows = []
+    disc_hdrs = [
+        P('', 8),
+        P('<b>Name</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Position</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Department</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+        P('<b>Relationship To Applicant</b>', 8, bold=True, align=TA_CENTER, col=WHT),
+    ]
+    disc_rows = [disc_hdrs]
     for i in range(5):
         d = (disc[i] if i < len(disc) else {}) or {}
         disc_rows.append([
-            str(i+1),
-            s(d.get('name','')),
-            s(d.get('position','')),
-            s(d.get('department','')),
-            s(d.get('relationship',''))
+            P(str(i+1), 8, align=TA_CENTER),
+            P(s(d.get('name','')), 8),
+            P(s(d.get('position','')), 8),
+            P(s(d.get('department','')), 8),
+            P(s(d.get('relationship','')), 8),
         ])
-    story.append(dt(
-        ['#','Name','Position','Department','Relationship To Applicant'],
-        disc_rows,
-        [W*0.06, W*0.25, W*0.23, W*0.23, W*0.23]
-    ))
-    story.append(Spacer(1, 3*mm))
+    disc_tbl = Table(disc_rows, colWidths=[W*0.06, W*0.24, W*0.23, W*0.23, W*0.24])
+    disc_tbl.setStyle(TS([
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#444444')),
+        ('GRID',(0,0),(-1,-1),0.4,MGY),
+        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),4),
+        ('LEFTPADDING',(0,0),(-1,-1),4),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('ALIGN',(0,1),(0,-1),'CENTER'),
+    ]))
+    story.append(disc_tbl)
+    story.append(Spacer(1,3*mm))
 
-    story.append(P('I hereby certify that the above information is true and complete to the best of my knowledge and belief.', 8))
-    story.append(Spacer(1, 6*mm))
+    story.append(P("I hereby certify that the above information is true and complete to the best of my knowledge and belief.", 8))
+    story.append(Spacer(1,8*mm))
 
     cert_tbl = Table([
-        [P('', 8), P('', 8), P('N/A', 8), P(app_date, 8)],
-        [P('', 8), P('<b>Name & Signature</b>', 8, bold=True, align=TA_CENTER),
+        [P('', 8), P('', 8), P('N/A', 8, align=TA_CENTER), P(app_date, 8, align=TA_CENTER)],
+        [P('', 8),
+         P('<b>Name & Signature</b>', 8, bold=True, align=TA_CENTER),
          P('<b>Badge No.</b>', 8, bold=True, align=TA_CENTER),
          P('<b>Date</b>', 8, bold=True, align=TA_CENTER)],
-    ], colWidths=[W*0.10, W*0.40, W*0.25, W*0.25])
-    cert_tbl.setStyle(TableStyle([
+    ], colWidths=[W*0.08, W*0.42, W*0.25, W*0.25])
+    cert_tbl.setStyle(TS([
         ('LINEABOVE',(1,0),(1,0),0.5,BLK),
         ('LINEABOVE',(2,0),(2,0),0.5,BLK),
         ('LINEABOVE',(3,0),(3,0),0.5,BLK),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'),
-        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),2),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),2),
     ]))
     story.append(cert_tbl)
-    story.append(Spacer(1, 2*mm))
-    story.append(P('<b>* Note:</b> Non-disclosure may result in rejection of application.', 8))
-    story.append(Spacer(1, 4*mm))
+    story.append(Spacer(1,2*mm))
+    story.append(P('* <b>Note:</b>  Non-disclosure may result in rejection of application.', 8))
+    story.append(Spacer(1,5*mm))
+    story.append(HRFlowable(width=W, thickness=0.5, color=MGY, spaceAfter=2*mm))
 
-    story.append(HRFlowable(width=W, thickness=0.5, color=MG))
-    story.append(Spacer(1, 2*mm))
-    story.append(P('<b>Part II</b> - To be completed by the Recruitment Agency or appropriate Recruitment Services', 9, bold=True, align=TA_CENTER))
-    story.append(Spacer(1, 4*mm))
+    story.append(Table([[P('<b>Part II</b> - To be completed by the Recruitment Agency or appropriate Recruitment Services',
+                           9, bold=True, align=TA_CENTER)]], colWidths=[W]))
+    story.append(Spacer(1,4*mm))
     story.append(P('<b>Verified by:</b>', 9, bold=True))
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1,8*mm))
 
     ver_tbl = Table([
-        [P('', 8), P('', 8), P('N/A', 8), P(app_date, 8)],
-        [P('', 8), P('<b>Name & Signature</b>', 8, bold=True, align=TA_CENTER),
+        [P('', 8), P('', 8), P('N/A', 8, align=TA_CENTER), P(app_date, 8, align=TA_CENTER)],
+        [P('', 8),
+         P('<b>Name & Signature</b>', 8, bold=True, align=TA_CENTER),
          P('<b>Badge/ID No.</b>', 8, bold=True, align=TA_CENTER),
          P('<b>Date</b>', 8, bold=True, align=TA_CENTER)],
-    ], colWidths=[W*0.10, W*0.40, W*0.25, W*0.25])
-    ver_tbl.setStyle(TableStyle([
+    ], colWidths=[W*0.08, W*0.42, W*0.25, W*0.25])
+    ver_tbl.setStyle(TS([
         ('LINEABOVE',(1,0),(1,0),0.5,BLK),
         ('LINEABOVE',(2,0),(2,0),0.5,BLK),
         ('LINEABOVE',(3,0),(3,0),0.5,BLK),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'),
-        ('TOPPADDING',(0,0),(-1,-1),4),('BOTTOMPADDING',(0,0),(-1,-1),2),
+        ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),2),
     ]))
     story.append(ver_tbl)
-    story.append(Spacer(1, 4*mm))
+    story.append(Spacer(1,5*mm))
 
-    stamp_tbl = Table([[P('Recruitment Stamp', 9, align=TA_CENTER, color=colors.grey)]],
-                      colWidths=[40*mm], rowHeights=[40*mm])
-    stamp_tbl.setStyle(TableStyle([
-        ('BOX',(0,0),(-1,-1),0.5,MG),
-        ('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+    stamp_tbl = Table([[P('Recruitment Stamp', 9, align=TA_CENTER, col=colors.grey)]],
+                      colWidths=[38*mm], rowHeights=[38*mm])
+    stamp_tbl.setStyle(TS([
+        ('BOX',(0,0),(-1,-1),0.5,MGY),
+        ('ALIGN',(0,0),(-1,-1),'CENTER'),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
     ]))
     story.append(stamp_tbl)
-    story.append(Spacer(1, 3*mm))
-    story.append(HRFlowable(width=W, thickness=0.5, color=MG))
-    story.append(P('Non-Clinical Form    Rev. 08/2022    Ref# APP 1427-18, Appendix A    Page 1 of 1    APP 1443-11, Appendix A    CPRA # 0503-0140', 7, align=TA_CENTER, color=colors.grey))
+    story.append(Spacer(1,3*mm))
+    story.append(HRFlowable(width=W, thickness=0.4, color=MGY))
+    story.append(P('Non-Clinical Form    Rev. 08/2022    Ref# APP 1427-18, Appendix A    Page 1 of 1    APP 1443-11, Appendix A    CPRA # 0503-0140',
+                   7, align=TA_CENTER, col=colors.grey))
 
     doc.build(story)
     buf.seek(0)
@@ -1043,7 +1192,6 @@ def build_ngha_ah_pdf(data):
 
 @app.route('/generate_ngha_ah', methods=['POST'])
 def generate_ngha_ah():
-    """Generate NGHA Non-Clinical (Allied Health) Application Form PDF"""
     try:
         data = request.get_json()
         pdf_buf = build_ngha_ah_pdf(data)
