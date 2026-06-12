@@ -6,4 +6,6 @@ docxtpl==0.20.2
 docxcompose==1.4.0
 python-docx==1.1.2
 lxml==5.2.2
+arabic-reshaper==3.0.0
+python-bidi==0.4.2
  
