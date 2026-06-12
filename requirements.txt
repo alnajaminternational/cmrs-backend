@@ -1,6 +1,8 @@
-flask
-flask-cors
-reportlab
-gunicorn
-arabic-reshaper
-python-bidi
+flask==3.0.3
+reportlab==4.2.2
+pillow==10.3.0
+gunicorn==22.0.0
+docxtpl==0.20.2
+docxcompose==1.4.0
+python-docx==1.1.2
+lxml==5.2.2
