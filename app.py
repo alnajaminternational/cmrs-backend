@@ -724,46 +724,37 @@ def build_allied_health_pdf(data):
 
         if is_loc_box:
             for para in txbx.iter(f'{{{ns}}}p'):
-                runs = list(para.iter(f'{{{ns}}}r'))
-                if not runs: continue
-                # Safely get text from each run
+                # Get combined paragraph text
                 parts = []
-                for r in runs:
+                t_els = []
+                for r in para.iter(f'{{{ns}}}r'):
                     t_el = r.find(f'{{{ns}}}t')
-                    if t_el is not None and t_el.text:
-                        parts.append(t_el.text)
+                    if t_el is not None:
+                        parts.append(t_el.text or '')
+                        t_els.append(t_el)
                 para_text = ''.join(parts).strip()
-                if para_text in loc_options:
-                    first_t = None
-                    for r in runs:
-                        t_el = r.find(f'{{{ns}}}t')
-                        if t_el is not None:
-                            if first_t is None:
-                                first_t = t_el
-                                t_el.text = ('[X] ' if para_text in locations else '[ ] ') + para_text
-                            else:
-                                t_el.text = ''
+                if para_text in loc_options and t_els:
+                    # Only modify first t element, set it to full replacement
+                    mark = '[X]' if para_text in locations else '[ ]'
+                    t_els[0].text = f'{mark} {para_text}'
+                    for t_el in t_els[1:]:
+                        t_el.text = ''
 
         elif is_src_box:
             for para in txbx.iter(f'{{{ns}}}p'):
-                runs = list(para.iter(f'{{{ns}}}r'))
-                if not runs: continue
                 parts = []
-                for r in runs:
+                t_els = []
+                for r in para.iter(f'{{{ns}}}r'):
                     t_el = r.find(f'{{{ns}}}t')
-                    if t_el is not None and t_el.text:
-                        parts.append(t_el.text)
+                    if t_el is not None:
+                        parts.append(t_el.text or '')
+                        t_els.append(t_el)
                 para_text = ''.join(parts).strip()
-                if para_text in src_options:
-                    first_t = None
-                    for r in runs:
-                        t_el = r.find(f'{{{ns}}}t')
-                        if t_el is not None:
-                            if first_t is None:
-                                first_t = t_el
-                                t_el.text = ('[X] ' if para_text in selected_src else '[ ] ') + para_text
-                            else:
-                                t_el.text = ''
+                if para_text in src_options and t_els:
+                    mark = '[X]' if para_text in selected_src else '[ ]'
+                    t_els[0].text = f'{mark} {para_text}'
+                    for t_el in t_els[1:]:
+                        t_el.text = ''
 
     # Save filled docx
     filled = tempfile.NamedTemporaryFile(suffix='.docx', delete=False, dir='/tmp')
