@@ -723,42 +723,47 @@ def build_allied_health_pdf(data):
         is_src_box = 'Recruitment Source' in all_text or ('Agency' in all_text and 'Internet' in all_text)
 
         if is_loc_box:
-            # Process paragraph by paragraph to handle multi-run words like "Al Ahsa"
             for para in txbx.iter(f'{{{ns}}}p'):
-                # Get all runs in this paragraph
                 runs = list(para.iter(f'{{{ns}}}r'))
                 if not runs: continue
-                # Combine all text in paragraph
-                para_text = ''.join((r.find(f'{{{ns}}}t') or type('obj',[],{'text':''})()).text or '' for r in runs if r.find(f'{{{ns}}}t') is not None)
-                para_text_stripped = para_text.strip()
-                if para_text_stripped in loc_options:
-                    # Clear all runs except first, put checkbox text in first run's t element
+                # Safely get text from each run
+                parts = []
+                for r in runs:
+                    t_el = r.find(f'{{{ns}}}t')
+                    if t_el is not None and t_el.text:
+                        parts.append(t_el.text)
+                para_text = ''.join(parts).strip()
+                if para_text in loc_options:
                     first_t = None
                     for r in runs:
-                        t = r.find(f'{{{ns}}}t')
-                        if t is not None:
+                        t_el = r.find(f'{{{ns}}}t')
+                        if t_el is not None:
                             if first_t is None:
-                                first_t = t
-                                t.text = ('[X] ' if para_text_stripped in locations else '[ ] ') + para_text_stripped
+                                first_t = t_el
+                                t_el.text = ('[X] ' if para_text in locations else '[ ] ') + para_text
                             else:
-                                t.text = ''
+                                t_el.text = ''
 
         elif is_src_box:
             for para in txbx.iter(f'{{{ns}}}p'):
                 runs = list(para.iter(f'{{{ns}}}r'))
                 if not runs: continue
-                para_text = ''.join((r.find(f'{{{ns}}}t') or type('obj',[],{'text':''})()).text or '' for r in runs if r.find(f'{{{ns}}}t') is not None)
-                para_text_stripped = para_text.strip()
-                if para_text_stripped in src_options:
+                parts = []
+                for r in runs:
+                    t_el = r.find(f'{{{ns}}}t')
+                    if t_el is not None and t_el.text:
+                        parts.append(t_el.text)
+                para_text = ''.join(parts).strip()
+                if para_text in src_options:
                     first_t = None
                     for r in runs:
-                        t = r.find(f'{{{ns}}}t')
-                        if t is not None:
+                        t_el = r.find(f'{{{ns}}}t')
+                        if t_el is not None:
                             if first_t is None:
-                                first_t = t
-                                t.text = ('[X] ' if para_text_stripped in selected_src else '[ ] ') + para_text_stripped
+                                first_t = t_el
+                                t_el.text = ('[X] ' if para_text in selected_src else '[ ] ') + para_text
                             else:
-                                t.text = ''
+                                t_el.text = ''
 
     # Save filled docx
     filled = tempfile.NamedTemporaryFile(suffix='.docx', delete=False, dir='/tmp')
