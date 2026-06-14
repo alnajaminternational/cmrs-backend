@@ -735,7 +735,7 @@ def build_allied_health_pdf(data):
                 para_text = ''.join(parts).strip()
                 if para_text in loc_options and t_els:
                     # Only modify first t element, set it to full replacement
-                    mark = '[X]' if para_text in locations else '[ ]'
+                    mark = '\u2611' if para_text in locations else '\u2610'
                     t_els[0].text = f'{mark} {para_text}'
                     for t_el in t_els[1:]:
                         t_el.text = ''
@@ -751,7 +751,7 @@ def build_allied_health_pdf(data):
                         t_els.append(t_el)
                 para_text = ''.join(parts).strip()
                 if para_text in src_options and t_els:
-                    mark = '[X]' if para_text in selected_src else '[ ]'
+                    mark = '\u2611' if para_text in selected_src else '\u2610'
                     t_els[0].text = f'{mark} {para_text}'
                     for t_el in t_els[1:]:
                         t_el.text = ''
