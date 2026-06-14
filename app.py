@@ -811,6 +811,7 @@ def build_allied_health_pdf(data):
     doc = tpl.docx
     txbx_ns = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape'
 
+    ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
     for txbx in doc.element.body.iter(f'{{{txbx_ns}}}txbx'):
         all_text = ''.join(t.text or '' for t in txbx.iter(f'{{{ns}}}t'))
         is_loc = 'Preferred location' in all_text or any(x in all_text for x in ['Riyadh','Jeddah','Madinah'])
