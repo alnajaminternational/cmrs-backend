@@ -816,9 +816,8 @@ def build_allied_health_pdf(data):
     for fp in [tpl_file.name, filled.name, pdf_path] + tmp_img_files:
         try: os.unlink(fp)
         except: pass
-    for d in [out_dir, img_dir]:
-        try: os.rmdir(d)
-        except: pass
+    try: os.rmdir(out_dir)
+    except: pass
 
     return io.BytesIO(pdf_bytes)
 
