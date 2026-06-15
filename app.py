@@ -751,7 +751,7 @@ def build_allied_health_pdf(data):
 
     # Exact col widths from Word
     LL = 28.5*mm; LV = 63.5*mm; RL = 35.0*mm; RV = 57.0*mm  # Personal data
-    RH = 7.5*mm   # standard row height
+    RH = 6.8*mm   # standard row height
 
     story = []
 
@@ -760,7 +760,7 @@ def build_allied_health_pdf(data):
     # ═══════════════════════════════════════════════════════════════
 
     # Header as image — exact NGHA branding
-    hdr_img = img_from_b64(NGHA_HEADER_B64, 181, 13)
+    hdr_img = img_from_b64(NGHA_HEADER_B64, 181, 12)
     story.append(hdr_img)
     story.append(HRFlowable(width=W, thickness=0.8, color=BLK, spaceAfter=1*mm))
     story.append(P('<b>International Recruitment Application Form</b>', 11, True, TA_CENTER))
@@ -834,7 +834,7 @@ def build_allied_health_pdf(data):
         [P('Marital Status:',9),  P(marital,9),       P('Email Address :',9),    P(email,9)],
         [P('Name of spouse:',9),  P(spouse_name,9),   P('',9),                   P('',9)],
     ], colWidths=[LL,LV,RL,RV],
-       rowHeights=[RH,RH,RH,RH,RH*1.2,RH,RH*1.3,RH*1.3,RH,RH,RH])
+       rowHeights=[RH,RH,RH,RH,RH*1.1,RH,RH*1.2,RH*1.2,RH,RH,RH])
     pd.setStyle(TS(
         ('BACKGROUND',(0,0),(0,-1),LGY),
         ('BACKGROUND',(2,0),(2,-1),LGY),
@@ -855,10 +855,10 @@ def build_allied_health_pdf(data):
          P(f"{chk('Work',visa_type=='Work')} {chk('Dependent',visa_type=='Dependent')} {chk('Visit',visa_type=='Visit')}",9)],
         [P('Emergency Contact\nPerson :',9), P(emg_contact,9),
          P('Mobile No. :',9), P(emg_mobile,9)],
-    ], colWidths=[LL,LV,RL,RV], rowHeights=[RH*1.3,RH*1.3,RH*1.3])
+    ], colWidths=[LL,LV,RL,RV], rowHeights=[RH*1.2,RH*1.2,RH*1.2])
     se.setStyle(TS(('BACKGROUND',(0,0),(0,-1),LGY),('BACKGROUND',(2,0),(2,-1),LGY)))
     story.append(se)
-    story.append(Spacer(1,1.5*mm))
+    story.append(Spacer(1,0.9*mm))
 
     # Qualifications — T2: 68.7 | 28.2 | 24.2 | 24.7 | 38.4
     story.append(sec_row('Qualifications : (Please attach copies of all qualifications listed below)'))
@@ -876,7 +876,7 @@ def build_allied_health_pdf(data):
                   rowHeights=[10*mm]+[7*mm]*3)
     q_tbl.setStyle(DTS())
     story.append(q_tbl)
-    story.append(Spacer(1,1.5*mm))
+    story.append(Spacer(1,0.9*mm))
 
     # Licensing — T3: 68.5 | 36.3 | 37.9 | 41.4
     l_rows = [[
@@ -894,8 +894,8 @@ def build_allied_health_pdf(data):
     story.append(l_tbl)
 
     # Footer P1 as image
-    story.append(Spacer(1,1*mm))
-    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 9))
+    story.append(Spacer(1,0.6*mm))
+    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 8))
 
     # ═══════════════════════════════════════════════════════════════
     # PAGE 2
@@ -914,7 +914,7 @@ def build_allied_health_pdf(data):
                   rowHeights=[8*mm]+[7*mm]*3)
     t_tbl.setStyle(DTS())
     story.append(t_tbl)
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
 
     # Employment — T5: 65.8 | 25.7 | 23.7 | 27.8 | 41.4 (adjusted for 2-row header)
     story.append(sec_row('Employment History : (Start from current or most recent employment and attach a detailed CV/resume supporting this)'))
@@ -952,7 +952,7 @@ def build_allied_health_pdf(data):
     ]
     e_tbl.setStyle(e_style)
     story.append(e_tbl)
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
 
     # References — T6: 66.5 | 35.4 | 19.4 | 25.0 | 37.6
     story.append(sec_row('Work Related Reference who may be contacted :'))
@@ -981,11 +981,11 @@ def build_allied_health_pdf(data):
     ]
     ref_tbl.setStyle(ref_style)
     story.append(ref_tbl)
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
 
     # Authorization
     story.append(P('<b>Authorization</b>',10,True,TA_CENTER))
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
     story.append(P(
         "I hereby authorize the Recruitment Services of Ministry of National Guard Health Affairs to request "
         "and obtain details held about me from any organization, in order to exercise due diligence verifying "
@@ -996,7 +996,7 @@ def build_allied_health_pdf(data):
         "best of my knowledge. I understand that I could have my contract terminated (or my offer of employment "
         "cancelled); if it is found that I have deliberately given false or misleading information or if my "
         "professional license is revoked during or after the application process.",9))
-    story.append(Spacer(1,4*mm))
+    story.append(Spacer(1,2.4*mm))
 
     # Signature — T8: 128.9 | 55.1
     sig_tbl = Table([[
@@ -1010,11 +1010,11 @@ def build_allied_health_pdf(data):
         ('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
     story.append(sig_tbl)
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
     story.append(P("As an essential function and responsibility of a recruitment agency, I confirm that primary "
                    "source verification of the above applicant's license, qualification & experience will be "
                    "implemented when offer released.",9))
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
 
     # Agency Info — T9: 44.6 | 63.8 | 11.9 | 63.6 → adjusted
     agency = Table([
@@ -1032,11 +1032,11 @@ def build_allied_health_pdf(data):
         ('FONTNAME',(0,0),(-1,0),FB),
     ))
     story.append(agency)
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
     story.append(P('<b>THANK YOU FOR TAKING THE TIME TO COMPLETE THIS APPLICATION FORM. PLEASE NOTE THAT APPLICATIONS EXPIRE AFTER ONE YEAR.</b>',
                    8.5,True,TA_CENTER))
-    story.append(Spacer(1,1*mm))
-    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 9))
+    story.append(Spacer(1,0.6*mm))
+    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 8))
 
     # ═══════════════════════════════════════════════════════════════
     # PAGE 3 — DISCLOSURE
@@ -1044,11 +1044,11 @@ def build_allied_health_pdf(data):
     story.append(PageBreak())
 
     # Header same as page 1 - use image
-    story.append(img_from_b64(NGHA_HEADER_B64, 181, 13))
+    story.append(img_from_b64(NGHA_HEADER_B64, 181, 12))
     story.append(HRFlowable(width=W,thickness=0.8,color=BLK,spaceAfter=2*mm))
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
     story.append(P('<b>Disclosure Form For New Applicants</b>',13,True,TA_CENTER))
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
 
     def grey_band(txt):
         t = Table([[P(txt,9,True,TA_CENTER)]], colWidths=[W])
@@ -1060,7 +1060,7 @@ def build_allied_health_pdf(data):
         return t
 
     story.append(grey_band('<b>Part I</b> - To be completed by the Applicant'))
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
 
     # Applicant info — T10 style: 28.5 | 63.5 | 35.0 | 57.0
     di = Table([
@@ -1082,11 +1082,11 @@ def build_allied_health_pdf(data):
         ('VALIGN',(1,3),(1,3),'TOP'),
     ))
     story.append(di)
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
     story.append(P("I disclose herewith all my relationships and affiliations with those currently employed in all National Guard Health Affairs facilities*.",9))
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
     story.append(P('<b>Relatives / Acquaintances working for National Guard Health Affairs:</b>',9,True))
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
 
     # Disclosure table — T11: 6.7 | 47.2 | 50.8 | 41.3 | 38.3
     d_rows = [[P('',8.5),
@@ -1105,9 +1105,9 @@ def build_allied_health_pdf(data):
                   rowHeights=[8*mm]+[10*mm]*5)
     d_tbl.setStyle(DTS())
     story.append(d_tbl)
-    story.append(Spacer(1,4*mm))
+    story.append(Spacer(1,2.4*mm))
     story.append(P("I hereby certify that the above information is true and complete to the best of my knowledge and belief.",9))
-    story.append(Spacer(1,8*mm))
+    story.append(Spacer(1,4.8*mm))
 
     cert = Table([
         [P('',9), P('',9), P('N/A',9,align=TA_CENTER), P(app_date,9,align=TA_CENTER)],
@@ -1119,16 +1119,16 @@ def build_allied_health_pdf(data):
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),2),
     ]))
     story.append(cert)
-    story.append(Spacer(1,2*mm))
+    story.append(Spacer(1,1.2*mm))
     story.append(P('* <b>Note:</b>  Non-disclosure may result in rejection of application.',9))
-    story.append(Spacer(1,5*mm))
+    story.append(Spacer(1,3.0*mm))
     story.append(HRFlowable(width=W,thickness=0.5,color=BLGY,spaceAfter=2*mm))
 
     # Part II
     story.append(grey_band('<b>Part II</b> - To be completed by the Agency or appropriate Recruitment Services'))
-    story.append(Spacer(1,4*mm))
+    story.append(Spacer(1,2.4*mm))
     story.append(P('<b>Verified By:</b>',9,True))
-    story.append(Spacer(1,3*mm))
+    story.append(Spacer(1,1.8*mm))
 
     stamp = img_from_b64(STAMP_B64, 35, 35)
     stamp_box = Table([[stamp],[P('Recruitment Stamp',8,align=TA_CENTER,col=colors.grey)]],
@@ -1152,8 +1152,8 @@ def build_allied_health_pdf(data):
     ]))
 
     story.append(Table([[stamp_box, ver]], colWidths=[40*mm, W-40*mm]))
-    story.append(Spacer(1,2*mm))
-    story.append(img_from_b64(NGHA_FOOTER3_B64, 181, 9))
+    story.append(Spacer(1,1.2*mm))
+    story.append(img_from_b64(NGHA_FOOTER3_B64, 181, 8))
 
     doc.build(story)
     buf.seek(0)
