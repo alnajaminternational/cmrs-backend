@@ -729,19 +729,33 @@ def build_allied_health_pdf(data):
     def gi(lst, i): return lst[i] if i < len(lst) else {}
 
     def get_qual(i):
+        import re as _re
         item = gi(quals_raw, i)
         raw = s(item.get('dateFrom',''))
-        # If raw contains ' — ', it's a combined stored string
+        # If raw contains ' -- ' or em-dash, it's a combined stored string
         if ' -- ' in raw or ' — ' in raw:
             return parse_raw(raw, ['dateFrom','dateTo','degree','institution','country'])
-        # Otherwise use item fields directly (handles dateFrom as range)
+        # Check if dateTo field is actually a degree (field shift from old stored data)
+        dt_val = s(item.get('dateTo',''))
+        is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
+        if not is_date and dt_val:
+            # Fields shifted: dateTo=degree, degree=institution, institution=country
+            df, _ = split_range(raw)
+            return {
+                'dateFrom':    df,
+                'dateTo':      '',
+                'degree':      dt_val,
+                'institution': s(item.get('degree','')),
+                'country':     s(item.get('institution','')),
+            }
+        # Normal path - use item fields directly
         df, dt = split_range(raw)
         return {
-            'dateFrom':   df,
-            'dateTo':     dt,
-            'degree':     s(item.get('degree','')),
-            'institution':s(item.get('institution','')),
-            'country':    s(item.get('country','')),
+            'dateFrom':    df,
+            'dateTo':      dt if dt else dt_val,
+            'degree':      s(item.get('degree','')),
+            'institution': s(item.get('institution','')),
+            'country':     s(item.get('country','')),
         }
 
     def get_lic(i):
@@ -767,6 +781,7 @@ def build_allied_health_pdf(data):
         }
 
     def get_train(i):
+        import re as _re
         item = gi(trains_raw, i)
         raw = s(item.get('dateFrom',''))
         if ' -- ' in raw or ' — ' in raw:
@@ -777,7 +792,16 @@ def build_allied_health_pdf(data):
                 'discipline':  parts[1] if len(parts) > 1 else '',
                 'courseTitle': parts[2] if len(parts) > 2 else '',
             }
+        # Check if dateTo has discipline (field shift)
+        dt_val = s(item.get('dateTo',''))
+        is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
         df, _ = split_range(raw)
+        if not is_date and dt_val:
+            return {
+                'dateFrom':    df,
+                'discipline':  dt_val,
+                'courseTitle': s(item.get('discipline','')),
+            }
         return {
             'dateFrom':    df,
             'discipline':  s(item.get('discipline','')),
@@ -785,14 +809,26 @@ def build_allied_health_pdf(data):
         }
 
     def get_exp(i):
+        import re as _re
         item = gi(exps_raw, i)
         raw = s(item.get('dateFrom',''))
         if ' -- ' in raw or ' — ' in raw:
             return parse_raw(raw, ['dateFrom','dateTo','position','institution','country'])
+        dt_val = s(item.get('dateTo',''))
+        is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
         df, dt = split_range(raw)
+        if not is_date and dt_val:
+            # Fields shifted
+            return {
+                'dateFrom':    df,
+                'dateTo':      '',
+                'position':    dt_val,
+                'institution': s(item.get('position','')),
+                'wardUnit':    s(item.get('institution','')),
+            }
         return {
             'dateFrom':    df,
-            'dateTo':      dt,
+            'dateTo':      dt if dt else dt_val,
             'position':    s(item.get('position','')),
             'institution': s(item.get('institution','')),
             'wardUnit':    s(item.get('wardUnit','')),
