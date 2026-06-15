@@ -602,17 +602,32 @@ def build_allied_health_pdf(data):
         if not b64:
             return P('')
         try:
-            from PIL import Image as PILImage
             img_data = base64.b64decode(b64)
-            pil_img = PILImage.open(io.BytesIO(img_data)).convert('RGBA')
-            bg = PILImage.new('RGB', pil_img.size, (255,255,255))
-            bg.paste(pil_img, mask=pil_img.split()[3])
+            # Try direct load first
+            try:
+                return RLImage(io.BytesIO(img_data), width=w*mm, height=h*mm)
+            except:
+                pass
+            # Fallback: PIL conversion to RGB
+            from PIL import Image as PILImage
+            pil_img = PILImage.open(io.BytesIO(img_data))
+            if pil_img.mode in ('RGBA', 'LA', 'P'):
+                bg = PILImage.new('RGB', pil_img.size, (255,255,255))
+                if pil_img.mode == 'P':
+                    pil_img = pil_img.convert('RGBA')
+                if 'A' in pil_img.getbands():
+                    bg.paste(pil_img, mask=pil_img.split()[-1])
+                else:
+                    bg.paste(pil_img)
+                pil_img = bg
+            elif pil_img.mode != 'RGB':
+                pil_img = pil_img.convert('RGB')
             out = io.BytesIO()
-            bg.save(out, 'PNG')
+            pil_img.save(out, 'PNG')
             out.seek(0)
             return RLImage(out, width=w*mm, height=h*mm)
         except Exception as ex:
-            print(f"img_from_b64 error: {ex}")
+            print(f"img_from_b64 error ({w}x{h}): {ex}")
             return P('')
 
     def chk(label, checked=False):
@@ -689,7 +704,8 @@ def build_allied_health_pdf(data):
     weight      = s(data.get('weight',''))
     marital     = s(data.get('maritalStatus',''))
     email       = s(data.get('email',''))
-    phone       = s(data.get('phone',''))
+    phone_raw   = s(data.get('phone',''))
+    phone       = ('+' + phone_raw) if phone_raw and not phone_raw.startswith('+') else phone_raw
     address     = s(data.get('address',''))
     spouse_name = s(data.get('spouseName',''))
     spouse_king = s(data.get('spouseInKingdom',''))
@@ -715,36 +731,72 @@ def build_allied_health_pdf(data):
     def get_qual(i):
         item = gi(quals_raw, i)
         raw = s(item.get('dateFrom',''))
-        if ' — ' in raw or (' to ' in raw and len(raw) > 20):
+        # If raw contains ' — ', it's a combined stored string
+        if ' -- ' in raw or ' — ' in raw:
             return parse_raw(raw, ['dateFrom','dateTo','degree','institution','country'])
-        df, dt = split_range(s(item.get('dateFrom','')))
-        return {'dateFrom':df,'dateTo':dt,'degree':s(item.get('degree','')),'institution':s(item.get('institution','')),'country':s(item.get('country',''))}
+        # Otherwise use item fields directly (handles dateFrom as range)
+        df, dt = split_range(raw)
+        return {
+            'dateFrom':   df,
+            'dateTo':     dt,
+            'degree':     s(item.get('degree','')),
+            'institution':s(item.get('institution','')),
+            'country':    s(item.get('country','')),
+        }
 
     def get_lic(i):
         item = gi(lics_raw, i)
         raw = s(item.get('licenseNo',''))
-        if ' — ' in raw:
-            parts = [p.strip() for p in raw.split(' — ')]
-            return {'licenseNo':parts[0] if parts else '','country':parts[1] if len(parts)>1 else '','issueDate':parts[2] if len(parts)>2 else '','expiryDate':fmt_date(parts[3]) if len(parts)>3 else '','authority':parts[4] if len(parts)>4 else ''}
-        return {'licenseNo':s(item.get('licenseNo','')),'country':s(item.get('country','')),'issueDate':s(item.get('issueDate','')),'expiryDate':fmt_date(s(item.get('expiryDate',''))),'authority':s(item.get('authority',''))}
+        # If licenseNo contains ' -- ' it's a combined stored string
+        if ' -- ' in raw or ' — ' in raw:
+            parts = [p.strip() for p in raw.replace(' — ',' -- ').split(' -- ')]
+            return {
+                'licenseNo':  parts[0] if len(parts) > 0 else '',
+                'country':    parts[1] if len(parts) > 1 else '',
+                'issueDate':  parts[2] if len(parts) > 2 else '',
+                'expiryDate': fmt_date(parts[3]) if len(parts) > 3 else '',
+                'authority':  parts[4] if len(parts) > 4 else '',
+            }
+        # Use item fields directly
+        return {
+            'licenseNo':  raw,
+            'country':    s(item.get('country','')),
+            'issueDate':  fmt_date(s(item.get('issueDate',''))),
+            'expiryDate': fmt_date(s(item.get('expiryDate',''))),
+            'authority':  s(item.get('authority','')),
+        }
 
     def get_train(i):
         item = gi(trains_raw, i)
         raw = s(item.get('dateFrom',''))
-        if ' — ' in raw or (' to ' in raw and len(raw) > 20):
-            parts = [p.strip() for p in raw.split(' — ')]
-            df, dt = split_range(parts[0]) if parts else ('','')
-            return {'dateFrom':df,'discipline':parts[1] if len(parts)>1 else '','courseTitle':parts[2] if len(parts)>2 else ''}
-        df, _ = split_range(s(item.get('dateFrom','')))
-        return {'dateFrom':df,'discipline':s(item.get('discipline','')),'courseTitle':s(item.get('courseTitle',''))}
+        if ' -- ' in raw or ' — ' in raw:
+            parts = [p.strip() for p in raw.replace(' — ',' -- ').split(' -- ')]
+            df, _ = split_range(parts[0]) if parts else ('','')
+            return {
+                'dateFrom':    df,
+                'discipline':  parts[1] if len(parts) > 1 else '',
+                'courseTitle': parts[2] if len(parts) > 2 else '',
+            }
+        df, _ = split_range(raw)
+        return {
+            'dateFrom':    df,
+            'discipline':  s(item.get('discipline','')),
+            'courseTitle': s(item.get('courseTitle','')),
+        }
 
     def get_exp(i):
         item = gi(exps_raw, i)
         raw = s(item.get('dateFrom',''))
-        if ' — ' in raw or (' to ' in raw and len(raw) > 20):
+        if ' -- ' in raw or ' — ' in raw:
             return parse_raw(raw, ['dateFrom','dateTo','position','institution','country'])
-        df, dt = split_range(s(item.get('dateFrom','')))
-        return {'dateFrom':df,'dateTo':dt,'position':s(item.get('position','')),'institution':s(item.get('institution','')),'wardUnit':s(item.get('wardUnit',''))}
+        df, dt = split_range(raw)
+        return {
+            'dateFrom':    df,
+            'dateTo':      dt,
+            'position':    s(item.get('position','')),
+            'institution': s(item.get('institution','')),
+            'wardUnit':    s(item.get('wardUnit','')),
+        }
 
     q  = [get_qual(i)  for i in range(3)]
     l  = [get_lic(i)   for i in range(3)]
