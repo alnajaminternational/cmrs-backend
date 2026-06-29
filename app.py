@@ -548,7 +548,7 @@ def build_allied_health_pdf(data):
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=7.5*mm, rightMargin=7.5*mm,
         topMargin=9.9*mm, bottomMargin=13.4*mm)
-    W = 181.0*mm  # usable width
+    W = 181.0*mm  # usable width — FIX #11: all tables sum to exactly this
 
     # Colours
     BLK  = colors.black
@@ -598,17 +598,56 @@ def build_allied_health_pdf(data):
         ]))
         return t
 
+    # FIX #7 & #18 — header/footer image with text fallback
+    def img_or_text_fallback(b64, w_mm, h_mm, fallback_lines=None):
+        """Try to render image; if it fails, render text fallback matching Word template."""
+        if b64:
+            try:
+                img_data = base64.b64decode(b64)
+                try:
+                    return RLImage(io.BytesIO(img_data), width=w_mm*mm, height=h_mm*mm)
+                except:
+                    pass
+                from PIL import Image as PILImage
+                pil_img = PILImage.open(io.BytesIO(img_data))
+                if pil_img.mode in ('RGBA', 'LA', 'P'):
+                    bg = PILImage.new('RGB', pil_img.size, (255,255,255))
+                    if pil_img.mode == 'P':
+                        pil_img = pil_img.convert('RGBA')
+                    if 'A' in pil_img.getbands():
+                        bg.paste(pil_img, mask=pil_img.split()[-1])
+                    else:
+                        bg.paste(pil_img)
+                    pil_img = bg
+                elif pil_img.mode != 'RGB':
+                    pil_img = pil_img.convert('RGB')
+                out = io.BytesIO()
+                pil_img.save(out, 'PNG')
+                out.seek(0)
+                return RLImage(out, width=w_mm*mm, height=h_mm*mm)
+            except Exception as ex:
+                print(f"img_or_text_fallback error ({w_mm}x{h_mm}): {ex}")
+        # Text fallback
+        if fallback_lines:
+            rows = [[P(line, 8, bold, align, col)] for (line, bold, align, col) in fallback_lines]
+            t = Table(rows, colWidths=[w_mm*mm])
+            t.setStyle(TableStyle([
+                ('TOPPADDING',(0,0),(-1,-1),1),('BOTTOMPADDING',(0,0),(-1,-1),1),
+                ('LEFTPADDING',(0,0),(-1,-1),3),
+            ]))
+            return t
+        return P('')
+
+    # Keep old img_from_b64 for photo only
     def img_from_b64(b64, w, h):
         if not b64:
             return P('')
         try:
             img_data = base64.b64decode(b64)
-            # Try direct load first
             try:
                 return RLImage(io.BytesIO(img_data), width=w*mm, height=h*mm)
             except:
                 pass
-            # Fallback: PIL conversion to RGB
             from PIL import Image as PILImage
             pil_img = PILImage.open(io.BytesIO(img_data))
             if pil_img.mode in ('RGBA', 'LA', 'P'):
@@ -629,6 +668,18 @@ def build_allied_health_pdf(data):
         except Exception as ex:
             print(f"img_from_b64 error ({w}x{h}): {ex}")
             return P('')
+
+    # Text fallback definitions for header and footers
+    HEADER_FALLBACK = [
+        ('Ministry of National Guard — Health Affairs', True,  TA_CENTER, colors.HexColor('#1a3a6b')),
+        ('وزارة الحرس الوطني — الشؤون الصحية',         False, TA_CENTER, colors.HexColor('#1a3a6b')),
+    ]
+    FOOTER12_FALLBACK = [
+        ('National Guard Health Affairs | Recruitment Services | www.ngha.med.sa', False, TA_CENTER, colors.HexColor('#595959')),
+    ]
+    FOOTER3_FALLBACK = [
+        ('National Guard Health Affairs | Recruitment Services | www.ngha.med.sa', False, TA_CENTER, colors.HexColor('#595959')),
+    ]
 
     def chk(label, checked=False):
         return f"{'[X]' if checked else '[ ]'} {label}"
@@ -732,14 +783,11 @@ def build_allied_health_pdf(data):
         import re as _re
         item = gi(quals_raw, i)
         raw = s(item.get('dateFrom',''))
-        # If raw contains ' -- ' or em-dash, it's a combined stored string
         if ' -- ' in raw or ' — ' in raw:
             return parse_raw(raw, ['dateFrom','dateTo','degree','institution','country'])
-        # Check if dateTo field is actually a degree (field shift from old stored data)
         dt_val = s(item.get('dateTo',''))
         is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
         if not is_date and dt_val:
-            # Fields shifted: dateTo=degree, degree=institution, institution=country
             df, _ = split_range(raw)
             return {
                 'dateFrom':    df,
@@ -748,11 +796,11 @@ def build_allied_health_pdf(data):
                 'institution': s(item.get('degree','')),
                 'country':     s(item.get('institution','')),
             }
-        # Normal path - use item fields directly
         df, dt = split_range(raw)
+        # FIX #16 — if dateTo is empty but item has dateTo field, use it
         return {
             'dateFrom':    df,
-            'dateTo':      dt if dt else dt_val,
+            'dateTo':      dt if dt else fmt_date(s(item.get('dateTo',''))),
             'degree':      s(item.get('degree','')),
             'institution': s(item.get('institution','')),
             'country':     s(item.get('country','')),
@@ -761,23 +809,30 @@ def build_allied_health_pdf(data):
     def get_lic(i):
         item = gi(lics_raw, i)
         raw = s(item.get('licenseNo',''))
-        # If licenseNo contains ' -- ' it's a combined stored string
+        # FIX #17b — support new fields: licensingBody, country, designation, licenseNo, issueDate, expiryDate
+        # Also support old combined stored string for backward compat
         if ' -- ' in raw or ' — ' in raw:
             parts = [p.strip() for p in raw.replace(' — ',' -- ').split(' -- ')]
             return {
-                'licenseNo':  parts[0] if len(parts) > 0 else '',
-                'country':    parts[1] if len(parts) > 1 else '',
-                'issueDate':  parts[2] if len(parts) > 2 else '',
-                'expiryDate': fmt_date(parts[3]) if len(parts) > 3 else '',
-                'authority':  parts[4] if len(parts) > 4 else '',
+                'licensingBody': parts[0] if len(parts) > 0 else '',
+                'country':       parts[1] if len(parts) > 1 else '',
+                'designation':   parts[2] if len(parts) > 2 else '',
+                'licenseNo':     parts[3] if len(parts) > 3 else '',
+                'issueDate':     fmt_date(parts[4]) if len(parts) > 4 else '',
+                'expiryDate':    fmt_date(parts[5]) if len(parts) > 5 else '',
+                # backward compat alias
+                'authority':     parts[0] if len(parts) > 0 else '',
             }
-        # Use item fields directly
+        # New fields direct from payload
+        licensing_body = s(item.get('licensingBody','')) or s(item.get('authority',''))
         return {
-            'licenseNo':  raw,
-            'country':    s(item.get('country','')),
-            'issueDate':  fmt_date(s(item.get('issueDate',''))),
-            'expiryDate': fmt_date(s(item.get('expiryDate',''))),
-            'authority':  s(item.get('authority','')),
+            'licensingBody': licensing_body,
+            'country':       s(item.get('country','')),
+            'designation':   s(item.get('designation','')),
+            'licenseNo':     raw,
+            'issueDate':     fmt_date(s(item.get('issueDate',''))),
+            'expiryDate':    fmt_date(s(item.get('expiryDate',''))),
+            'authority':     licensing_body,
         }
 
     def get_train(i):
@@ -792,7 +847,6 @@ def build_allied_health_pdf(data):
                 'discipline':  parts[1] if len(parts) > 1 else '',
                 'courseTitle': parts[2] if len(parts) > 2 else '',
             }
-        # Check if dateTo has discipline (field shift)
         dt_val = s(item.get('dateTo',''))
         is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
         df, _ = split_range(raw)
@@ -818,7 +872,6 @@ def build_allied_health_pdf(data):
         is_date = bool(_re.match(r'\d{1,2} \w{3} \d{4}', dt_val)) if dt_val else True
         df, dt = split_range(raw)
         if not is_date and dt_val:
-            # Fields shifted
             return {
                 'dateFrom':    df,
                 'dateTo':      '',
@@ -845,9 +898,15 @@ def build_allied_health_pdf(data):
     AN_NAME  = 'Al Najam International'
     AN_EMAIL = 'support@alnajam.com'
 
-    # Exact col widths from Word
-    LL = 28.5*mm; LV = 63.5*mm; RL = 35.0*mm; RV = 57.0*mm  # Personal data
-    RH = 6.8*mm   # standard row height
+    # FIX #11 — Personal Data col widths sum exactly to 181mm
+    # FIX #9  — Widen position label col; FIX #15 — Widen Iqama label col
+    # FIX #22 — Widen Phone label col on page 3
+    LL = 32.0*mm   # left label  (was 28.5) — FIX #9 & #15
+    LV = 60.0*mm   # left value  (was 63.5)
+    RL = 37.0*mm   # right label (was 35.0)
+    RV = 52.0*mm   # right value (was 57.0)
+    # Total: 32+60+37+52 = 181mm ✓  FIX #11
+    RH = 6.8*mm    # standard row height
 
     story = []
 
@@ -855,15 +914,23 @@ def build_allied_health_pdf(data):
     # PAGE 1
     # ═══════════════════════════════════════════════════════════════
 
-    # Header as image — exact NGHA branding
-    hdr_img = img_from_b64(NGHA_HEADER_B64, 181, 12)
-    story.append(hdr_img)
+    # FIX #7 — header with text fallback
+    story.append(img_or_text_fallback(NGHA_HEADER_B64, 181, 12, HEADER_FALLBACK))
     story.append(HRFlowable(width=W, thickness=0.8, color=BLK, spaceAfter=1*mm))
-    story.append(P('<b>International Recruitment Application Form</b>', 11, True, TA_CENTER))
+
+    # FIX #13 — grey background on heading
+    heading_tbl = Table([[P('<b>International Recruitment Application Form</b>', 11, True, TA_CENTER)]],
+                        colWidths=[W])
+    heading_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0,0),(-1,-1), LGY),
+        ('TOPPADDING', (0,0),(-1,-1), 4),
+        ('BOTTOMPADDING', (0,0),(-1,-1), 4),
+        ('BOX', (0,0),(-1,-1), 0.4, BLGY),
+    ]))
+    story.append(heading_tbl)
     story.append(Spacer(1, 1.5*mm))
 
-    # Date + Location | Position + Photo
-    loc_opts = ['Riyadh','Jeddah','Madinah','Al Ahsa','Dammam','PHCs','No Preference']
+    # FIX #8 — Date of Application on its own row, location below
     loc_grid = Table([
         [P(chk('Riyadh',  'Riyadh'  in locations),8.5), P(chk('Jeddah',  'Jeddah'  in locations),8.5), P(chk('Madinah', 'Madinah' in locations),8.5)],
         [P(chk('Al Ahsa', 'Al Ahsa' in locations),8.5), P(chk('Dammam',  'Dammam'  in locations),8.5), P(chk('PHCs',    'PHCs'    in locations),8.5)],
@@ -872,7 +939,7 @@ def build_allied_health_pdf(data):
     loc_grid.setStyle(TableStyle([('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),('LEFTPADDING',(0,0),(-1,-1),2)]))
 
     left_box = Table([
-        [P(f'Date of Application :   {app_date}', 9)],
+        [P(f'<b>Date of Application :</b>   {app_date}', 9)],   # FIX #8 — own row
         [P('Preferred location for employment', 9)],
         [loc_grid],
     ], colWidths=[W*0.49])
@@ -881,82 +948,90 @@ def build_allied_health_pdf(data):
         ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
 
+    # FIX #9 — wider position label col (0.26 → 0.28), larger photo box (0.11 → 0.13)
     pos_tbl = Table([
-        [P('Position you are applying for :', 9), P(position, 9)],
-        [P('Area of Speciality :', 9),             P(specialty, 9)],
-        [P('Availability :', 9),                   P(avail, 9)],
-        [P('Referred by : (Name & Badge No.)', 9), P('N/A', 9)],
-    ], colWidths=[W*0.235, W*0.155], rowHeights=[RH]*4)
+        [P('Position applying for :', 9), P(position, 9)],
+        [P('Area of Speciality :', 9),    P(specialty, 9)],
+        [P('Availability :', 9),          P(avail, 9)],
+        [P('Referred by :', 9),           P('N/A', 9)],
+    ], colWidths=[W*0.26, W*0.21], rowHeights=[RH]*4)
     pos_tbl.setStyle(TS(('BACKGROUND',(0,0),(0,-1),LGY)))
 
+    # FIX #9 — enlarged photo box
     photo_box = Table([[P('Photo', 9, align=TA_CENTER, col=colors.grey)]],
-                      colWidths=[W*0.11], rowHeights=[30*mm])
+                      colWidths=[W*0.13], rowHeights=[32*mm])
     photo_box.setStyle(TableStyle([('BOX',(0,0),(-1,-1),0.4,BLGY),('ALIGN',(0,0),(-1,-1),'CENTER'),('VALIGN',(0,0),(-1,-1),'MIDDLE')]))
 
-    right_col = Table([[pos_tbl, photo_box]], colWidths=[W*0.39, W*0.11])
+    right_col = Table([[pos_tbl, photo_box]], colWidths=[W*0.47, W*0.13])
     right_col.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))
 
     story.append(Table([[left_box, right_col]], colWidths=[W*0.50, W*0.50]))
     story.append(Spacer(1, 1.5*mm))
 
-    # Recruitment Source
+    # FIX #10 — Recruitment Source spans full width W
     src_tbl = Table([
-        [P('Recruitment Source :', 9), P('', 9)],
-        [P(chk('Agency',True),8.5),   P(chk('Internet',False),8.5)],
-        [P(chk('Local',False),8.5),   P(chk('Referred',False),8.5)],
-        [P(chk('Rehire',False),8.5),  P(chk('Other',False),8.5)],
-    ], colWidths=[W*0.22, W*0.19])
+        [P('Recruitment Source :', 9), P('', 9), P('', 9), P('', 9)],
+        [P(chk('Agency',True),8.5),   P(chk('Internet',False),8.5), P(chk('Local',False),8.5),  P(chk('Referred',False),8.5)],
+        [P(chk('Rehire',False),8.5),  P(chk('Other',False),8.5),    P('',8.5),                  P('',8.5)],
+    ], colWidths=[W*0.22, W*0.22, W*0.22, W*0.34])
     src_tbl.setStyle(TableStyle([
-        ('BOX',(0,0),(-1,-1),0.4,BLGY),('SPAN',(0,0),(1,0)),
+        ('BOX',(0,0),(-1,-1),0.4,BLGY),
+        ('SPAN',(0,0),(3,0)),   # FIX #10 — label spans all 4 cols
+        ('GRID',(0,1),(-1,-1),0.4,BLGY),
         ('TOPPADDING',(0,0),(-1,-1),2),('BOTTOMPADDING',(0,0),(-1,-1),2),('LEFTPADDING',(0,0),(-1,-1),4),
     ]))
     story.append(src_tbl)
     story.append(Spacer(1, 1.5*mm))
 
-    # Personal Data — exact widths from Word T1: 28.5 | 63.5 | 35.0 | 57.0
+    # FIX #11 — Personal Data col widths now sum to exactly 181mm (32+60+37+52)
     story.append(sec_row('Personal Data : (Please print clearly)'))
+
+    # FIX #14 — Gender/Religion split cells, DOB/Age split cells
     pd = Table([
-        [P('First Name :',9),     P(first_name,9),   P('Permanent Address:',9), P(address,8.5)],
-        [P('Second Name :',9),    P('',9),            P('',9),                   P('',9)],
-        [P('Family Name :',9),    P(family_name,9),   P('Telephone No. :',9),    P(phone,9)],
-        [P('Gender :',9),         P(gender,9),        P('Mobile No. :',9),       P(phone,9)],
-        [P('Religion :',9),       P(religion,9),      P('Current Address :',9),
-         P('(No need to fill if same as permanent)',8)],
-        [P('Nationality :',9),    P(nationality,9),   P('',9),                   P('',9)],
-        [P('Date of Birth\n(DD-MM-YYYY) :',9), P(dob,9), P('Age :',9),          P(age,9)],
+        [P('First Name :',9),      P(first_name,9),    P('Permanent Address:',9),  P(address,8.5)],
+        [P('Second Name :',9),     P('',9),             P('',9),                    P('',9)],
+        [P('Family Name :',9),     P(family_name,9),    P('Telephone No. :',9),     P(phone,9)],
+        # FIX #14 — Gender and Religion each in their own label+value pair
+        [P('Gender :',9),          P(gender,9),         P('Religion :',9),           P(religion,9)],
+        [P('Nationality :',9),     P(nationality,9),    P('Current Address :',9),
+         P('(same as permanent if blank)',8)],
+        [P('',9),                  P('',9),             P('',9),                    P('',9)],
+        # FIX #14 — DOB and Age split into left+right cells
+        [P('Date of Birth\n(DD-MM-YYYY) :',9), P(dob,9), P('Age :',9),             P(age,9)],
         [P('Place of Birth :\n(include Country)',9), P(place_birth,9),
-         P('Telephone No./\nMobile No. :',9),         P(phone,9)],
-        [P('Height (in cm) :',9), P(height,9),        P('Weight (in kgs.) :',9), P(weight,9)],
-        [P('Marital Status:',9),  P(marital,9),       P('Email Address :',9),    P(email,9)],
-        [P('Name of spouse:',9),  P(spouse_name,9),   P('',9),                   P('',9)],
+         P('Mobile No. :',9),                         P(phone,9)],
+        [P('Height (in cm) :',9),  P(height,9),         P('Weight (in kgs.) :',9),  P(weight,9)],
+        [P('Marital Status:',9),   P(marital,9),        P('Email Address :',9),     P(email,9)],
+        [P('Name of spouse:',9),   P(spouse_name,9),    P('',9),                    P('',9)],
     ], colWidths=[LL,LV,RL,RV],
-       rowHeights=[RH,RH,RH,RH,RH*1.1,RH,RH*1.2,RH*1.2,RH,RH,RH])
+       rowHeights=[RH,RH,RH,RH,RH*1.1,RH*0.6,RH*1.2,RH*1.2,RH,RH,RH])
     pd.setStyle(TS(
         ('BACKGROUND',(0,0),(0,-1),LGY),
         ('BACKGROUND',(2,0),(2,-1),LGY),
-        ('SPAN',(2,0),(3,1)),   # Address spans rows 0-1
-        ('SPAN',(2,4),(3,5)),   # Current address spans rows 4-5
-        ('SPAN',(2,10),(3,10)), # Spouse right blank
+        ('SPAN',(2,0),(3,1)),    # Address spans rows 0-1
+        ('SPAN',(2,4),(3,5)),    # Current address spans rows 4-5
+        ('SPAN',(2,10),(3,10)),  # Spouse right blank
         ('VALIGN',(2,0),(3,1),'TOP'),
         ('VALIGN',(2,4),(3,5),'TOP'),
     ))
     story.append(pd)
 
+    # FIX #12 — Widen Spouse label to avoid wrapping; FIX #15 — Widen Iqama label
     se = Table([
-        [P('Is your Spouse living\nin the Kingdom?',9),
+        [P('Spouse in Kingdom?',9),
          P(f"{chk('Yes',spouse_king=='Yes')}   {chk('No',spouse_king!='Yes')}",9),
          P('Company/Sponsor:',9), P(sponsor,9)],
-        [P('Iqama/Residency\nPermit No.:',9), P(iqama,9),
+        [P('Iqama / Residency No.:',9), P(iqama,9),   # FIX #15 — shorter label
          P('Visa Type:',9),
          P(f"{chk('Work',visa_type=='Work')} {chk('Dependent',visa_type=='Dependent')} {chk('Visit',visa_type=='Visit')}",9)],
-        [P('Emergency Contact\nPerson :',9), P(emg_contact,9),
+        [P('Emergency Contact :',9), P(emg_contact,9),
          P('Mobile No. :',9), P(emg_mobile,9)],
     ], colWidths=[LL,LV,RL,RV], rowHeights=[RH*1.2,RH*1.2,RH*1.2])
     se.setStyle(TS(('BACKGROUND',(0,0),(0,-1),LGY),('BACKGROUND',(2,0),(2,-1),LGY)))
     story.append(se)
     story.append(Spacer(1,0.9*mm))
 
-    # Qualifications — T2: 68.7 | 28.2 | 24.2 | 24.7 | 38.4
+    # Qualifications — col widths sum to 181mm: 68.7+28.2+24.2+24.7+35.2 = 181
     story.append(sec_row('Qualifications : (Please attach copies of all qualifications listed below)'))
     q_rows = [[
         P('<b>Name of College/University</b>',8.5,True,TA_CENTER,WHT),
@@ -968,37 +1043,61 @@ def build_allied_health_pdf(data):
     for qi in range(3):
         q_rows.append([P(q[qi]['institution'],9), P(q[qi]['country'],9),
                        P(q[qi]['dateFrom'],9), P(q[qi]['dateTo'],9), P(q[qi]['degree'],9)])
-    q_tbl = Table(q_rows, colWidths=[68.7*mm,28.2*mm,24.2*mm,24.7*mm,38.4*mm],
+    q_tbl = Table(q_rows, colWidths=[68.7*mm,28.2*mm,24.2*mm,24.7*mm,35.2*mm],
                   rowHeights=[10*mm]+[7*mm]*3)
     q_tbl.setStyle(DTS())
     story.append(q_tbl)
     story.append(Spacer(1,0.9*mm))
 
-    # Licensing — T3: 68.5 | 36.3 | 37.9 | 41.4
+    # FIX #17b — Licensing table updated to new fields:
+    # Licensing Body | Country | Designation | License No. | Issue Date | Expiry Date
+    # Col widths: 50+28+30+30+21+22 = 181mm
     l_rows = [[
-        P('<b>Professional Licensing Body</b>',8.5,True,TA_CENTER,WHT),
+        P('<b>Licensing Body</b>',8.5,True,TA_CENTER,WHT),
         P('<b>Country</b>',8.5,True,TA_CENTER,WHT),
-        P('<b>License/Registration No.</b>',8.5,True,TA_CENTER,WHT),
-        P('<b>Expiration Date</b>',8.5,True,TA_CENTER,WHT),
+        P('<b>Designation</b>',8.5,True,TA_CENTER,WHT),
+        P('<b>License / Reg. No.</b>',8.5,True,TA_CENTER,WHT),
+        P('<b>Issue\nDate</b>',8.5,True,TA_CENTER,WHT),
+        P('<b>Expiry\nDate</b>',8.5,True,TA_CENTER,WHT),
     ]]
     for li in range(3):
-        l_rows.append([P(l[li]['authority'],9), P(l[li]['country'],9),
-                       P(l[li]['licenseNo'],9), P(l[li]['expiryDate'],9)])
-    l_tbl = Table(l_rows, colWidths=[68.5*mm,36.3*mm,37.9*mm,38.4*mm],
-                  rowHeights=[8*mm]+[7*mm]*3)
+        l_rows.append([
+            P(l[li]['licensingBody'],9),
+            P(l[li]['country'],9),
+            P(l[li]['designation'],9),
+            P(l[li]['licenseNo'],9),
+            P(l[li]['issueDate'],9),
+            P(l[li]['expiryDate'],9),
+        ])
+    l_tbl = Table(l_rows, colWidths=[50*mm,28*mm,30*mm,30*mm,21*mm,22*mm],
+                  rowHeights=[10*mm]+[7*mm]*3)
     l_tbl.setStyle(DTS())
     story.append(l_tbl)
 
-    # Footer P1 as image
+    # FIX #18 — footer with text fallback
     story.append(Spacer(1,0.6*mm))
-    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 8))
+    story.append(img_or_text_fallback(NGHA_FOOTER12_B64, 181, 8, FOOTER12_FALLBACK))
 
     # ═══════════════════════════════════════════════════════════════
     # PAGE 2
     # ═══════════════════════════════════════════════════════════════
     story.append(PageBreak())
 
-    # Training — T4: 73.3 | 50.6 | 60.2
+    # Page 2 header + heading
+    story.append(img_or_text_fallback(NGHA_HEADER_B64, 181, 12, HEADER_FALLBACK))
+    story.append(HRFlowable(width=W, thickness=0.8, color=BLK, spaceAfter=1*mm))
+    heading_tbl2 = Table([[P('<b>International Recruitment Application Form</b>', 11, True, TA_CENTER)]],
+                         colWidths=[W])
+    heading_tbl2.setStyle(TableStyle([
+        ('BACKGROUND', (0,0),(-1,-1), LGY),
+        ('TOPPADDING', (0,0),(-1,-1), 4),
+        ('BOTTOMPADDING', (0,0),(-1,-1), 4),
+        ('BOX', (0,0),(-1,-1), 0.4, BLGY),
+    ]))
+    story.append(heading_tbl2)
+    story.append(Spacer(1, 1.5*mm))
+
+    # Training — T4: col widths 73.3+50.6+57.1 = 181mm
     t_rows = [[
         P('<b>Trainings Attended</b>',8.5,True,TA_CENTER,WHT),
         P('<b>Date Attended</b>',8.5,True,TA_CENTER,WHT),
@@ -1006,13 +1105,13 @@ def build_allied_health_pdf(data):
     ]]
     for ti in range(3):
         t_rows.append([P(t[ti]['discipline'],9), P(t[ti]['dateFrom'],9), P(t[ti]['courseTitle'],9)])
-    t_tbl = Table(t_rows, colWidths=[73.3*mm,50.6*mm,57.2*mm],
+    t_tbl = Table(t_rows, colWidths=[73.3*mm,50.6*mm,57.1*mm],
                   rowHeights=[8*mm]+[7*mm]*3)
     t_tbl.setStyle(DTS())
     story.append(t_tbl)
     story.append(Spacer(1,1.2*mm))
 
-    # Employment — T5: 65.8 | 25.7 | 23.7 | 27.8 | 41.4 (adjusted for 2-row header)
+    # FIX #19 — top-alignment on Hospital/Company cells
     story.append(sec_row('Employment History : (Start from current or most recent employment and attach a detailed CV/resume supporting this)'))
     e_hdr = [
         [P('<b>Hospital/Company/Employer Name & Address\n(Include Country)\n(No. of Hospital beds, if applicable)</b>',8,True,TA_CENTER,WHT),
@@ -1036,6 +1135,7 @@ def build_allied_health_pdf(data):
     ]
     all_e = e_hdr + e_data + e_last
     n = len(all_e)
+    # col widths: 65.8+15.9+15.9+43.0+40.4 = 181mm
     e_tbl = Table(all_e, colWidths=[65.8*mm,15.9*mm,15.9*mm,43.0*mm,40.4*mm],
                   rowHeights=[14*mm,6*mm]+[7*mm]*4+[7*mm,7*mm])
     e_style = DTS()
@@ -1045,12 +1145,14 @@ def build_allied_health_pdf(data):
         ('SPAN',(0,n-2),(4,n-2)),
         ('SPAN',(0,n-1),(2,n-1)),
         ('BACKGROUND',(0,2),(-1,n-1),WHT),
+        # FIX #19 — top-align institution (Hospital/Company) cells in data rows
+        ('VALIGN',(0,2),(0,n-3),'TOP'),
     ]
     e_tbl.setStyle(e_style)
     story.append(e_tbl)
     story.append(Spacer(1,1.2*mm))
 
-    # References — T6: 66.5 | 35.4 | 19.4 | 25.0 | 37.6
+    # References — col widths: 66.5+35.4+19.4+25.0+34.7 = 181mm
     story.append(sec_row('Work Related Reference who may be contacted :'))
     ref_rows = [[
         P('<b>Name</b>',8.5,True,TA_CENTER,WHT),
@@ -1062,9 +1164,11 @@ def build_allied_health_pdf(data):
     rn = s(ref1.get('name','')); rt = s(ref1.get('jobTitle',''))
     rh = ''; rw = s(ref1.get('work','')); re_em = s(ref1.get('email',''))
     ref_rows.append([P(rn,9), P(rt,9), P('Home :',9), P(rh,9), P('[X] Yes' if consent_yes else '[ ] Yes',9)])
-    ref_rows.append([P('',9),  P('',9),  P('Work :',9), P(rw,9),
-                     P('[ ] No (will not be contacted\nuntil consent is sought)' if consent_yes else '[X] No (will not be contacted\nuntil consent is sought)',9)])
-    ref_rows.append([P('',9),  P('',9),  P('Email :',9), P(re_em,9), P('',9)])
+
+    # FIX #20 — "No (will not be contacted...)" cell merged across rows 2-3 col 4
+    no_consent_txt = '[ ] No (will not be contacted\nuntil consent is sought)' if consent_yes else '[X] No (will not be contacted\nuntil consent is sought)'
+    ref_rows.append([P('',9), P('',9), P('Work :',9),  P(rw,9),    P(no_consent_txt,9)])
+    ref_rows.append([P('',9), P('',9), P('Email :',9), P(re_em,9), P('',9)])
 
     ref_tbl = Table(ref_rows, colWidths=[66.5*mm,35.4*mm,19.4*mm,25.0*mm,34.7*mm],
                     rowHeights=[10*mm,8*mm,10*mm,8*mm])
@@ -1074,6 +1178,9 @@ def build_allied_health_pdf(data):
         ('SPAN',(0,1),(0,3)),('SPAN',(1,1),(1,3)),
         ('VALIGN',(0,1),(1,3),'MIDDLE'),
         ('BACKGROUND',(0,1),(-1,-1),WHT),
+        # FIX #20 — merge "No" consent cell across rows 2-3
+        ('SPAN',(4,2),(4,3)),
+        ('VALIGN',(4,2),(4,3),'MIDDLE'),
     ]
     ref_tbl.setStyle(ref_style)
     story.append(ref_tbl)
@@ -1094,11 +1201,14 @@ def build_allied_health_pdf(data):
         "professional license is revoked during or after the application process.",9))
     story.append(Spacer(1,2.4*mm))
 
-    # Signature — T8: 128.9 | 55.1
+    # FIX #21 — applicant signature rendered in italic style
+    sig_style = ParagraphStyle('sig', fontSize=11, fontName=F, leading=13,
+                               alignment=TA_LEFT, textColor=BLK,
+                               fontStyle='italic' if False else 'normal')  # italic via HTML tag
     sig_tbl = Table([[
-        P(f'<b>Signature of Applicant :</b>  {app_sig}',9),
+        Paragraph(f'<b>Signature of Applicant :</b>  <i>{app_sig}</i>', ST(9)),
         P(f'<b>Date :</b>  {app_date}',9),
-    ]], colWidths=[128.9*mm, 55.1*mm])
+    ]], colWidths=[128.9*mm, 52.1*mm])
     sig_tbl.setStyle(TableStyle([
         ('LINEBELOW',(0,0),(0,0),0.5,BLK),
         ('LINEBELOW',(1,0),(1,0),0.5,BLK),
@@ -1112,7 +1222,7 @@ def build_allied_health_pdf(data):
                    "implemented when offer released.",9))
     story.append(Spacer(1,1.2*mm))
 
-    # Agency Info — T9: 44.6 | 63.8 | 11.9 | 63.6 → adjusted
+    # Agency Info — col widths: 50+60+20+51 = 181mm
     agency = Table([
         [P('<b>Recruitment Agency Information : (If applicable)</b>',9,True),'','',''],
         [P('Name of Recruitment Agency :',9), P(AN_NAME,9),'',''],
@@ -1132,15 +1242,15 @@ def build_allied_health_pdf(data):
     story.append(P('<b>THANK YOU FOR TAKING THE TIME TO COMPLETE THIS APPLICATION FORM. PLEASE NOTE THAT APPLICATIONS EXPIRE AFTER ONE YEAR.</b>',
                    8.5,True,TA_CENTER))
     story.append(Spacer(1,0.6*mm))
-    story.append(img_from_b64(NGHA_FOOTER12_B64, 181, 8))
+    # FIX #18 — footer with text fallback
+    story.append(img_or_text_fallback(NGHA_FOOTER12_B64, 181, 8, FOOTER12_FALLBACK))
 
     # ═══════════════════════════════════════════════════════════════
     # PAGE 3 — DISCLOSURE
     # ═══════════════════════════════════════════════════════════════
     story.append(PageBreak())
 
-    # Header same as page 1 - use image
-    story.append(img_from_b64(NGHA_HEADER_B64, 181, 12))
+    story.append(img_or_text_fallback(NGHA_HEADER_B64, 181, 12, HEADER_FALLBACK))
     story.append(HRFlowable(width=W,thickness=0.8,color=BLK,spaceAfter=2*mm))
     story.append(Spacer(1,1.2*mm))
     story.append(P('<b>Disclosure Form For New Applicants</b>',13,True,TA_CENTER))
@@ -1158,19 +1268,21 @@ def build_allied_health_pdf(data):
     story.append(grey_band('<b>Part I</b> - To be completed by the Applicant'))
     story.append(Spacer(1,1.8*mm))
 
-    # Applicant info — T10 style: 28.5 | 63.5 | 35.0 | 57.0
+    # FIX #22 — Phone label col widths adjusted (LL widened earlier handles this)
+    # "Position Applied For" spans full row — FIX for blank position
     di = Table([
         [P('Position Applied For :',9), P(position,9), P('',9), P('',9)],
         [P('Name',9), P(f':  {full_name}',9), P('Gender:',9),
          P(f"{chk('Male',gender=='Male')}   {chk('Female',gender=='Female')}",9)],
         [P('Nationality',9), P(f':  {nationality}',9), P('',9), P('',9)],
         [P('Postal Address',9), P(f':  {address}',8.5), P('',9), P('',9)],
-        [P('Phone No. Including\nCountry Code :',9), P(phone,9), P('Email:',9), P(email,9)],
+        [P('Phone No. / Country Code :',9), P(phone,9), P('Email:',9), P(email,9)],
     ], colWidths=[LL,LV,RL,RV],
        rowHeights=[7*mm,7*mm,7*mm,10*mm,8*mm])
     di.setStyle(TS(
         ('BACKGROUND',(0,0),(0,-1),LGY),
-        ('SPAN',(0,0),(3,0)),
+        ('SPAN',(0,0),(3,0)),   # Position Applied For spans full width
+        ('BACKGROUND',(0,0),(3,0),LGY),  # keep grey on spanned row label
         ('SPAN',(1,2),(3,2)),
         ('SPAN',(1,3),(3,3)),
         ('BACKGROUND',(2,1),(2,1),LGY),
@@ -1184,7 +1296,7 @@ def build_allied_health_pdf(data):
     story.append(P('<b>Relatives / Acquaintances working for National Guard Health Affairs:</b>',9,True))
     story.append(Spacer(1,1.2*mm))
 
-    # Disclosure table — T11: 6.7 | 47.2 | 50.8 | 41.3 | 38.3
+    # Disclosure table — col widths: 6.7+47.2+50.8+41.3+35.0 = 181mm
     d_rows = [[P('',8.5),
                P('<b>Name</b>',8.5,True,TA_CENTER,WHT),
                P('<b>Position</b>',8.5,True,TA_CENTER,WHT),
@@ -1197,21 +1309,26 @@ def build_allied_health_pdf(data):
             P(s(d.get('name','')),9), P(s(d.get('position','')),9),
             P(s(d.get('department','')),9), P(s(d.get('relationship','')),9)
         ])
-    d_tbl = Table(d_rows, colWidths=[6.7*mm,47.2*mm,50.8*mm,41.3*mm,38.3*mm],
-                  rowHeights=[8*mm,10*mm,10*mm,10*mm,10*mm,10*mm])
+    d_tbl = Table(d_rows, colWidths=[6.7*mm,47.2*mm,50.8*mm,41.3*mm,35.0*mm],
+                  rowHeights=[8*mm]+[10*mm]*5)
     d_tbl.setStyle(DTS())
     story.append(d_tbl)
     story.append(Spacer(1,2.4*mm))
+
+    # FIX #23 — "I hereby certify..." section layout
     story.append(P("I hereby certify that the above information is true and complete to the best of my knowledge and belief.",9))
     story.append(Spacer(1,4.8*mm))
 
     cert = Table([
-        [P('',9), P('',9), P('N/A',9,align=TA_CENTER), P(app_date,9,align=TA_CENTER)],
+        [P('',9), P(app_sig,9,align=TA_CENTER), P('N/A',9,align=TA_CENTER), P(app_date,9,align=TA_CENTER)],
         [P('',9), P('<b>Name & Signature</b>',9,True,TA_CENTER),
-         P('<b>Date</b>',9,True,TA_CENTER), P('',9)],
-    ], colWidths=[W*0.08,W*0.45,W*0.22,W*0.25])
+         P('<b>Badge/ID No.</b>',9,True,TA_CENTER),
+         P('<b>Date</b>',9,True,TA_CENTER)],
+    ], colWidths=[W*0.05, W*0.45, W*0.22, W*0.28])
     cert.setStyle(TableStyle([
-        ('LINEABOVE',(1,0),(1,0),0.5,BLK),('LINEABOVE',(2,0),(2,0),0.5,BLK),
+        ('LINEABOVE',(1,0),(1,0),0.5,BLK),
+        ('LINEABOVE',(2,0),(2,0),0.5,BLK),
+        ('LINEABOVE',(3,0),(3,0),0.5,BLK),
         ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),2),
     ]))
     story.append(cert)
@@ -1249,12 +1366,12 @@ def build_allied_health_pdf(data):
 
     story.append(Table([[stamp_box, ver]], colWidths=[40*mm, W-40*mm]))
     story.append(Spacer(1,1.2*mm))
-    story.append(img_from_b64(NGHA_FOOTER3_B64, 181, 8))
+    # FIX #18 — footer page 3 with text fallback
+    story.append(img_or_text_fallback(NGHA_FOOTER3_B64, 181, 8, FOOTER3_FALLBACK))
 
     doc.build(story)
     buf.seek(0)
     return buf
-
 
 @app.route('/generate_ngha_ah', methods=['POST'])
 def generate_ngha_ah():
