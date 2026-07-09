@@ -633,8 +633,14 @@ def build_allied_health_pdf(data):
         # YYYY-MM-DD → DD/MM/YYYY
         m = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', val)
         if m: return f'{m.group(3)}/{m.group(2)}/{m.group(1)}'
-        return val   # year-only, "09 Jul 2026", or unrecognised — return as-is
-
+   # DD Mon YYYY (e.g. "22 Jul 2026") → DD/MM/YYYY
+        _months = {'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,
+                   'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12}
+        m = re.match(r'^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$', val)
+        if m:
+            mon = _months.get(m.group(2).lower())
+            if mon: return f'{int(m.group(1)):02d}/{mon:02d}/{m.group(3)}'
+        return val   # year-only or unrecognised — return as-is
     def cell_wrap(txt, x0, y0_top, y1_top, max_w, size=9, pad=3, font=None):
         """Like cell() but wraps long text to 2 lines, centred within the row height.
         Falls back to character-level splitting for text with no spaces (e.g. emails)."""
