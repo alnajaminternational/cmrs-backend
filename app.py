@@ -889,13 +889,14 @@ def build_allied_health_pdf(data):
 def generate_ngha_ah():
     try:
         data = request.get_json()
-        pdf_buf = build_allied_health_pdf(data)
+        pdf_bytes = build_allied_health_pdf(data)
         pos  = str(data.get('position','') or '')
         name = str(data.get('fullName','') or '')
-        fname = "NGHA Allied Health Form — " + " — ".join([p for p in [pos,name] if p]) + ".pdf"
-        return send_file(pdf_buf, mimetype='application/pdf',
+        fname = "NGHA Allied Health Form - " + " - ".join([p for p in [pos,name] if p]) + ".pdf"
+        return send_file(io.BytesIO(pdf_bytes), mimetype='application/pdf',
                          as_attachment=True, download_name=fname)
     except Exception as e:
-        print("NGHA AH ERROR:", e)
-        import traceback; traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        tb = traceback.format_exc()
+        print("NGHA AH ERROR:", tb)
+        return jsonify({'error': str(e), 'traceback': tb}), 500
