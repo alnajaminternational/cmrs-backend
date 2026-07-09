@@ -620,21 +620,73 @@ def build_allied_health_pdf(data):
             c.rect(x, y_rl, w, h, fill=1, stroke=0)
 
     def normalize_date(val):
-        """Reformat date strings to DD-MM-YYYY where possible."""
+        """Reformat date strings to DD/MM/YYYY; handles ISO datetimes from Google Sheets."""
         val = str(val or '').strip()
         if not val: return val
-        # Already DD-MM-YYYY
-        if re.match(r'^\d{2}-\d{2}-\d{4}$', val): return val
-        # YYYY-MM-DD → DD-MM-YYYY
+        # Strip ISO time component (e.g. 1990-03-15T00:00:00.000Z from Google Sheets)
+        val = re.sub(r'T\d{2}:\d{2}:\d{2}.*', '', val).strip()
+        # Already DD/MM/YYYY
+        if re.match(r'^\d{2}/\d{2}/\d{4}$', val): return val
+        # DD-MM-YYYY → DD/MM/YYYY
+        m = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{4})$', val)
+        if m: return f'{int(m.group(1)):02d}/{int(m.group(2)):02d}/{m.group(3)}'
+        # YYYY-MM-DD → DD/MM/YYYY
         m = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', val)
-        if m: return f'{m.group(3)}-{m.group(2)}-{m.group(1)}'
-        # DD/MM/YYYY → DD-MM-YYYY
-        m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', val)
-        if m: return f'{int(m.group(1)):02d}-{int(m.group(2)):02d}-{m.group(3)}'
-        # MM/DD/YYYY → DD-MM-YYYY
-        m = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', val)
-        if m: return f'{int(m.group(2)):02d}-{int(m.group(1)):02d}-{m.group(3)}'
-        return val   # year-only or unrecognised — return as-is
+        if m: return f'{m.group(3)}/{m.group(2)}/{m.group(1)}'
+        return val   # year-only, "09 Jul 2026", or unrecognised — return as-is
+
+    def cell_wrap(txt, x0, y0_top, y1_top, max_w, size=9, pad=3, font=None):
+        """Like cell() but wraps long text to 2 lines, centred within the row height.
+        Falls back to character-level splitting for text with no spaces (e.g. emails)."""
+        txt = str(txt or '').strip()
+        if not txt: return
+        fn = font or F
+        avail = max_w - 2 * pad
+        c.setFont(fn, size)
+        if c.stringWidth(txt, fn, size) <= avail:
+            # Single line fits — vertically centre it
+            c.drawString(x0 + pad, H - (y0_top + y1_top) / 2.0 - size * 0.3, txt)
+            return
+        sz = max(size - 1, 6)          # drop 1pt for 2-line fit
+        c.setFont(fn, sz)
+        # — word-level split —
+        words = txt.split()
+        line1, split_at = '', 0
+        for i, w in enumerate(words):
+            test = (line1 + ' ' + w).strip()
+            if c.stringWidth(test, fn, sz) <= avail:
+                line1 = test; split_at = i + 1
+            else:
+                break
+        if line1:
+            line2 = ' '.join(words[split_at:])
+        else:
+            # — character-level fallback (emails, phone numbers, no spaces) —
+            head = ''
+            for ch in txt:
+                if c.stringWidth(head + ch, fn, sz) <= avail:
+                    head += ch
+                else:
+                    break
+            if not head:                # even a single char doesn't fit — draw as-is
+                c.drawString(x0 + pad, H - (y0_top + y1_top) / 2.0 - sz * 0.3, txt)
+                return
+            line1 = head
+            line2 = txt[len(head):]
+        # Truncate line2 if still too long
+        if line2 and c.stringWidth(line2, fn, sz) > avail:
+            while len(line2) > 1 and c.stringWidth(line2 + '\u2026', fn, sz) > avail:
+                line2 = line2[:-1]
+            line2 += '\u2026'
+        # Draw 2 lines centred as a block within the cell
+        gap = 2
+        block_h = 2 * sz + gap
+        cell_mid = (y0_top + y1_top) / 2.0
+        block_top = cell_mid - block_h / 2.0
+        c.drawString(x0 + pad, H - block_top - sz, line1)
+        if line2:
+            c.drawString(x0 + pad, H - block_top - sz - gap - sz, line2)
+
 
     # ── Shared data ───────────────────────────────────────────────────────────
     name_parts = g('fullName').split()
@@ -743,11 +795,11 @@ def build_allied_health_pdf(data):
     quals = data.get('qualifications') or []
     for (y0, y1), q in zip([(629,648),(648,666),(666,684)], quals):
         if not isinstance(q, dict): continue
-        cell(q.get('institution',''),                29,  y0, y1)
-        cell(q.get('country',''),                   236, y0, y1)
-        cell(normalize_date(q.get('dateFrom','')),   326, y0, y1)
-        cell(normalize_date(q.get('dateTo','')),     380, y0, y1)
-        cell(q.get('degree',''),                    434, y0, y1)
+        cell_wrap(q.get('institution',''),              29,  y0, y1, max_w=207)
+        cell(q.get('country',''),                     236, y0, y1)
+        cell(normalize_date(q.get('dateFrom','')),     326, y0, y1)
+        cell(normalize_date(q.get('dateTo','')),       380, y0, y1)
+        cell_wrap(q.get('degree',''),                 434, y0, y1, max_w=117)
 
     # ── Professional Licensing table ──────────────────────────────────────────
     # Cols: authority x=29-237 | country x=237-326 | licenseNo x=326-434 | expiry x=434-551
@@ -776,9 +828,9 @@ def build_allied_health_pdf(data):
         dfrom = normalize_date(t.get('dateFrom',''))
         dto   = normalize_date(t.get('dateTo',''))
         dates = f'{dfrom} - {dto}'.strip(' -') if (dfrom or dto) else ''
-        cell(t.get('institution',''),                         29,  y0, y1)
-        cell(dates,                                             237, y0, y1)
-        cell(t.get('courseTitle','') or t.get('discipline',''), 344, y0, y1)
+        cell_wrap(t.get('institution',''),                         29,  y0, y1, max_w=208)
+        cell(dates,                                               237, y0, y1)
+        cell_wrap(t.get('courseTitle','') or t.get('discipline',''), 344, y0, y1, max_w=207)
 
     # ── Employment History table ───────────────────────────────────────────────
     # Cols: institution x=29-237 | from x=237-282 | to x=282-327 | position x=327-434
@@ -787,10 +839,10 @@ def build_allied_health_pdf(data):
     for (y0, y1), exp in zip([(180,198),(198,216),(216,234),(234,252)], experience):
         if not isinstance(exp, dict): continue
         inst = ' '.join(filter(None, [exp.get('institution',''), exp.get('country','')])).strip()
-        cell(inst,                                      29,  y0, y1, size=8)
-        cell(normalize_date(exp.get('dateFrom','')),   237, y0, y1, size=7)
-        cell(normalize_date(exp.get('dateTo','')),     282, y0, y1, size=7)
-        cell(exp.get('position',''),                   327, y0, y1, size=8)
+        cell_wrap(inst,                                     29,  y0, y1, max_w=208, size=8)
+        cell(normalize_date(exp.get('dateFrom','')),    237, y0, y1, size=8)
+        cell(normalize_date(exp.get('dateTo','')),      282, y0, y1, size=8)
+        cell_wrap(exp.get('position',''),               327, y0, y1, max_w=107, size=8)
 
     # ── Currently Employed (checkbox coords from PDF drawings) ────────────────
     # Yes x=157-165, No x=220-228  (both y=284-292)
@@ -811,10 +863,10 @@ def build_allied_health_pdf(data):
     refs = data.get('references') or []
     if refs:
         ref = refs[0] if isinstance(refs[0], dict) else {}
-        cell(ref.get('name',''),     29,  370, 424)   # name spans Home/Work/Email rows
-        cell(ref.get('jobTitle',''), 217, 370, 424)   # position spans same rows
-        cell(ref.get('work',''),     373, 388, 406)   # Work row
-        cell(ref.get('email',''),    373, 406, 424, size=7)  # Email — smaller font
+        cell(ref.get('name',''),          29,  370, 424)                    # name spans Home/Work/Email rows
+        cell_wrap(ref.get('jobTitle',''), 217, 370, 424, max_w=100)         # position — wraps if long
+        cell_wrap(ref.get('work',''),     373, 388, 406, max_w=72)          # Work row — wraps if long
+        cell_wrap(ref.get('email',''),    373, 406, 424, max_w=72, size=7)  # Email — smaller font, wraps
         consent = str(ref.get('consent', '')).lower()
         if 'yes' in consent or consent == 'true':
             fill_box(445.7, 374.4, 453.7, 382.4)
@@ -884,6 +936,7 @@ def build_allied_health_pdf(data):
 
     c.save()
     return buf.getvalue()
+
 
 @app.route('/generate_ngha_ah', methods=['POST'])
 def generate_ngha_ah():
