@@ -679,7 +679,9 @@ def build_allied_health_pdf(data):
                 line2 = line2[:-1]
             line2 += '\u2026'
         # Draw 2 lines centred as a block within the cell
-        gap = 2
+        # Shrink gap to 1pt if the block would overflow a narrow row
+        cell_height = y1_top - y0_top
+        gap = 2 if (2 * sz + 2) <= cell_height else 1
         block_h = 2 * sz + gap
         cell_mid = (y0_top + y1_top) / 2.0
         block_top = cell_mid - block_h / 2.0
