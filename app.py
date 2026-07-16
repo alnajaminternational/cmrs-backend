@@ -457,7 +457,7 @@ def build_an_pdf(data, redacted=False):
     footer_txt = ("Al Najam International  |  License # 0899/LHR  |  Human Resource Providers Since 1971<br/>"
                   "+92 300 4747 115  |  support@alnajam.com  |  www.alnajam.com")
     if redacted:
-        footer_txt += "<br/><font color='#C62D33'><b>[REDACTED â Contact details removed]</b></font>"
+        footer_txt += "<br/><font color='#C62D33'><b>[REDACTED - Contact details removed]</b></font>"
     story.append(Paragraph(footer_txt, AN_S(8,color=AN_GREY,align=TA_CENTER)))
 
     doc.build(story)
